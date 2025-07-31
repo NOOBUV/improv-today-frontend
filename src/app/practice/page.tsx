@@ -7,9 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import VoiceInterface from '@/components/VoiceInterface';
 import VocabularyCard from '@/components/VocabularyCard';
 import FeedbackPanel from '@/components/FeedbackPanel';
-import WaveformVisual from '@/components/WaveformVisual';
-import PhaseIndicator from '@/components/PhaseIndicator';
-import UsageScoreDisplay from '@/components/UsageScoreDisplay';
 import VoiceSettings from '@/components/VoiceSettings';
 import { useConversation } from '@/hooks/useConversation';
 import { useVocabularyTracking } from '@/hooks/useVocabularyTracking';
@@ -26,8 +23,6 @@ import {
 export default function PracticePage() {
   const [activeTab, setActiveTab] = useState('conversation');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
-  const [currentPhase, setCurrentPhase] = useState<'initial' | 'daily' | 'feedback'>('initial');
-  const [usageScore, setUsageScore] = useState(75);
   
   const {
     messages,
@@ -87,12 +82,6 @@ export default function PracticePage() {
           </p>
         </div>
 
-        {/* Phase Indicator */}
-        <PhaseIndicator 
-          currentPhase={currentPhase} 
-          onPhaseChange={setCurrentPhase}
-        />
-
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="conversation" className="flex items-center space-x-2">
@@ -117,11 +106,6 @@ export default function PracticePage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Main Practice Area */}
               <div className="lg:col-span-2 space-y-6">
-                {/* Usage Score Display */}
-                <UsageScoreDisplay 
-                  score={usageScore}
-                  animated={true}
-                />
                 {/* Session Controls */}
                 <Card className="p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -228,12 +212,6 @@ export default function PracticePage() {
                   </Card>
                 )}
 
-                {/* Waveform Visualization */}
-                <WaveformVisual
-                  isRecording={false}
-                  width={600}
-                  height={80}
-                />
               </div>
 
               {/* Sidebar */}

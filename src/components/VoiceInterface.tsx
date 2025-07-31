@@ -24,21 +24,33 @@ export default function VoiceInterface({
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
-  // Simplified state - no audio recording needed
-  const [duration, setDuration] = useState(0);
   const [isClient, setIsClient] = useState(false);
+  const [silenceTimer, setSilenceTimer] = useState<NodeJS.Timeout | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
   
   useEffect(() => {
     setIsClient(true);
-  }, []);
+    
+    // Cleanup on unmount
+    return () => {
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+      }
+    };
+  }, [silenceTimer]);
+
+  // Clear any existing silence timer
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimer) {
+      clearTimeout(silenceTimer);
+      setSilenceTimer(null);
+    }
+    setCountdown(null);
+  }, [silenceTimer]);
 
   // Handle completed transcript - send to backend for analysis
   const handleTranscriptComplete = useCallback(async (finalTranscript: string) => {
     try {
-      // STOP listening to prevent speech loop
-      setIsListening(false);
-      browserSpeech.stopListening();
-      
       console.log('🎯 Sending to backend:', finalTranscript);
       
       // Send transcript to backend for vocabulary analysis and AI response
@@ -59,10 +71,43 @@ export default function VoiceInterface({
       
     } catch (error) {
       console.error('Backend analysis failed:', error);
-      setIsListening(false);
-      browserSpeech.stopListening();
     }
   }, []);
+
+  // Start 8-second countdown for silence detection
+  const startSilenceTimer = useCallback(() => {
+    if (silenceTimer) {
+      clearTimeout(silenceTimer);
+    }
+    setCountdown(null);
+    
+    let timeLeft = 8;
+    setCountdown(timeLeft);
+    
+    const countdownInterval = setInterval(() => {
+      timeLeft--;
+      setCountdown(timeLeft);
+      
+      if (timeLeft <= 0) {
+        clearInterval(countdownInterval);
+        setCountdown(null);
+      }
+    }, 1000);
+    
+    const timer = setTimeout(() => {
+      clearInterval(countdownInterval);
+      setCountdown(null);
+      // Force stop listening after 8 seconds of silence
+      setIsListening(false);
+      browserSpeech.stopListening();
+      
+      if (transcript) {
+        handleTranscriptComplete(transcript);
+      }
+    }, 8000);
+    
+    setSilenceTimer(timer);
+  }, [transcript, handleTranscriptComplete, silenceTimer]);
 
   const handleStartListening = useCallback(async () => {
     if (!isClient) return;
@@ -87,38 +132,53 @@ export default function VoiceInterface({
     browserSpeech.startListening(
       (result) => {
         if (result.isFinal) {
+          // User has finished speaking a sentence
           const finalTranscript = result.transcript;
           setTranscript(prev => prev + finalTranscript);
           setInterimTranscript('');
           onTranscript?.(finalTranscript);
           
-          // Send transcript to backend for analysis and AI response
-          handleTranscriptComplete(finalTranscript);
+          // Start silence timer - if user doesn't speak for 8 seconds, end session
+          startSilenceTimer();
         } else {
+          // User is still speaking - reset silence timer
+          clearSilenceTimer();
           setInterimTranscript(result.transcript);
         }
       },
       (error) => {
         console.error('Speech recognition error:', error);
+        clearSilenceTimer();
         setIsListening(false);
       }
     );
   }, [isClient, onTranscript, handleTranscriptComplete]);
 
   const handleStopListening = useCallback(() => {
+    if (silenceTimer) {
+      clearTimeout(silenceTimer);
+      setSilenceTimer(null);
+    }
+    setCountdown(null);
     setIsListening(false);
     browserSpeech.stopListening();
     
     if (transcript) {
+      // Send complete transcript for analysis
+      handleTranscriptComplete(transcript);
       onSpeechEnd?.(null as any, transcript); // No audio blob needed
     }
-  }, [transcript, onSpeechEnd]);
+  }, [transcript, onSpeechEnd, silenceTimer, handleTranscriptComplete]);
 
   const resetTranscript = useCallback(() => {
+    if (silenceTimer) {
+      clearTimeout(silenceTimer);
+      setSilenceTimer(null);
+    }
+    setCountdown(null);
     setTranscript('');
     setInterimTranscript('');
-    setDuration(0);
-  }, []);
+  }, [silenceTimer]);
 
   if (!isClient) {
     return (
@@ -164,9 +224,15 @@ export default function VoiceInterface({
             </div>
           )}
 
-          {isListening && (
+          {isListening && countdown === null && (
             <div className="text-sm text-blue-600">
               🎤 Listening for speech...
+            </div>
+          )}
+
+          {countdown !== null && (
+            <div className="text-sm text-orange-600 font-medium">
+              ⏱️ Silence detected. Ending in {countdown} seconds...
             </div>
           )}
         </div>
