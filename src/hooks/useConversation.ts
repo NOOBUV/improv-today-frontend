@@ -89,16 +89,19 @@ export const useConversation = () => {
     }));
 
     try {
-      const formData = new FormData();
-      formData.append('message', content);
-      formData.append('topic', state.currentTopic || '');
-      if (audioBlob) {
-        formData.append('audio', audioBlob, 'recording.webm');
-      }
+      const requestBody = {
+        message: content,
+        target_vocabulary: [],
+        session_type: 'daily',
+        topic: state.currentTopic || ''
+      };
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/conversation`, {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -170,8 +173,7 @@ export const useConversation = () => {
       messages: [],
       isProcessing: false,
       sessionDuration: 0,
-      isSessionActive: false,
-      currentTopic: null,
+      currentTopic: undefined,
       error: null,
     });
 

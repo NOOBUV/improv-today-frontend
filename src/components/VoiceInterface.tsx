@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Mic, MicOff, Square, Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { browserSpeech } from '@/lib/speech';
 interface VoiceInterfaceProps {
   onTranscript?: (text: string) => void;
   onSpeechEnd?: (audioBlob: Blob, transcript: string) => void;
+  onAIResponse?: (response: string) => void; // New prop to get AI response for speech
   disabled?: boolean;
   className?: string;
 }
@@ -18,6 +19,7 @@ interface VoiceInterfaceProps {
 export default function VoiceInterface({
   onTranscript,
   onSpeechEnd,
+  onAIResponse,
   disabled = false,
   className = '',
 }: VoiceInterfaceProps) {
@@ -27,6 +29,18 @@ export default function VoiceInterface({
   const [isClient, setIsClient] = useState(false);
   const [silenceTimer, setSilenceTimer] = useState<NodeJS.Timeout | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  
+  // Use ref to always get current transcript value
+  const transcriptRef = useRef(transcript);
+  const handleTranscriptCompleteRef = useRef<((transcript: string) => Promise<void>) | null>(null);
+  const restartListeningRef = useRef<(() => void) | null>(null);
+  
+  // Update ref whenever transcript changes
+  useEffect(() => {
+    transcriptRef.current = transcript;
+  }, [transcript]);
+
+  // Speech synthesis is now handled at the parent component level
   
   useEffect(() => {
     setIsClient(true);
@@ -47,32 +61,6 @@ export default function VoiceInterface({
     }
     setCountdown(null);
   }, [silenceTimer]);
-
-  // Handle completed transcript - send to backend for analysis
-  const handleTranscriptComplete = useCallback(async (finalTranscript: string) => {
-    try {
-      console.log('🎯 Sending to backend:', finalTranscript);
-      
-      // Send transcript to backend for vocabulary analysis and AI response
-      const result = await browserSpeech.analyzeTranscript(finalTranscript);
-      
-      console.log('🤖 Backend response:', result);
-      
-      // Speak the AI response using Chrome Web Speech Synthesis
-      if (result.aiResponse) {
-        setTimeout(() => {
-          browserSpeech.speak(result.aiResponse, {
-            rate: 0.9,
-            pitch: 1,
-            volume: 0.8
-          });
-        }, 1000); // Longer delay to ensure speech recognition is fully stopped
-      }
-      
-    } catch (error) {
-      console.error('Backend analysis failed:', error);
-    }
-  }, []);
 
   // Start 8-second countdown for silence detection
   const startSilenceTimer = useCallback(() => {
@@ -101,13 +89,83 @@ export default function VoiceInterface({
       setIsListening(false);
       browserSpeech.stopListening();
       
-      if (transcript) {
-        handleTranscriptComplete(transcript);
+      // Use ref to get the current transcript value at timeout
+      const currentTranscript = transcriptRef.current;
+      console.log('🕐 Silence timeout triggered. Current transcript:', currentTranscript);
+      
+      if (currentTranscript && currentTranscript.trim()) {
+        handleTranscriptCompleteRef.current?.(currentTranscript);
+      } else {
+        console.log('⚠️ No transcript to send - transcript is empty');
       }
     }, 8000);
     
     setSilenceTimer(timer);
-  }, [transcript, handleTranscriptComplete, silenceTimer]);
+  }, [silenceTimer]);
+
+  // Restart listening (separate function to avoid circular dependencies)
+  const restartListening = useCallback(() => {
+    if (!isClient) return;
+    
+    console.log('🔄 Restarting listening...');
+    setIsListening(true);
+    setTranscript('');
+    setInterimTranscript('');
+    
+    // Use Chrome Web Speech API for transcription (FREE)
+    browserSpeech.startListening(
+      (result) => {
+        if (result.isFinal) {
+          // User has finished speaking a sentence
+          const finalTranscript = result.transcript.trim();
+          console.log('📝 Final transcript received:', finalTranscript);
+          
+          if (finalTranscript) {
+            setTranscript(prev => {
+              const newTranscript = prev ? prev + ' ' + finalTranscript : finalTranscript;
+              console.log('💾 Updated transcript state:', newTranscript);
+              return newTranscript;
+            });
+            setInterimTranscript('');
+            onTranscript?.(finalTranscript);
+            
+            // Start silence timer - if user doesn't speak for 8 seconds, end session
+            startSilenceTimer();
+          }
+        } else {
+          // User is still speaking - reset silence timer
+          clearSilenceTimer();
+          setInterimTranscript(result.transcript);
+        }
+      },
+      (error) => {
+        console.error('Speech recognition error:', error);
+        clearSilenceTimer();
+        setIsListening(false);
+      }
+    );
+  }, [isClient, onTranscript, startSilenceTimer, clearSilenceTimer]);
+
+  // Handle completed transcript - send via the conversation hook
+  const handleTranscriptComplete = useCallback(async (finalTranscript: string) => {
+    console.log('🎯 Processing transcript via conversation hook:', finalTranscript);
+    
+    // Use the provided onSpeechEnd callback to integrate with conversation state
+    if (onSpeechEnd) {
+      onSpeechEnd(null as any, finalTranscript); // No audio blob needed for browser speech
+      console.log('✅ Transcript sent to conversation hook');
+    } else {
+      console.log('⚠️ No onSpeechEnd callback provided');
+    }
+    
+    // Don't automatically restart - let the AI response handling restart after speaking
+  }, [onSpeechEnd]);
+
+  // Update the ref whenever the function changes
+  useEffect(() => {
+    handleTranscriptCompleteRef.current = handleTranscriptComplete;
+  }, [handleTranscriptComplete]);
+
 
   const handleStartListening = useCallback(async () => {
     if (!isClient) return;
@@ -123,36 +181,8 @@ export default function VoiceInterface({
     }
 
     // Note: Speech Recognition API will request permission automatically
-
-    setIsListening(true);
-    setTranscript('');
-    setInterimTranscript('');
-    
-    // Use Chrome Web Speech API for transcription (FREE)
-    browserSpeech.startListening(
-      (result) => {
-        if (result.isFinal) {
-          // User has finished speaking a sentence
-          const finalTranscript = result.transcript;
-          setTranscript(prev => prev + finalTranscript);
-          setInterimTranscript('');
-          onTranscript?.(finalTranscript);
-          
-          // Start silence timer - if user doesn't speak for 8 seconds, end session
-          startSilenceTimer();
-        } else {
-          // User is still speaking - reset silence timer
-          clearSilenceTimer();
-          setInterimTranscript(result.transcript);
-        }
-      },
-      (error) => {
-        console.error('Speech recognition error:', error);
-        clearSilenceTimer();
-        setIsListening(false);
-      }
-    );
-  }, [isClient, onTranscript, handleTranscriptComplete]);
+    restartListening();
+  }, [isClient, restartListening]);
 
   const handleStopListening = useCallback(() => {
     if (silenceTimer) {
@@ -163,12 +193,15 @@ export default function VoiceInterface({
     setIsListening(false);
     browserSpeech.stopListening();
     
-    if (transcript) {
+    const currentTranscript = transcriptRef.current;
+    console.log('🛑 Manual stop. Current transcript:', currentTranscript);
+    
+    if (currentTranscript && currentTranscript.trim()) {
       // Send complete transcript for analysis
-      handleTranscriptComplete(transcript);
-      onSpeechEnd?.(null as any, transcript); // No audio blob needed
+      handleTranscriptComplete(currentTranscript);
+      onSpeechEnd?.(null as any, currentTranscript); // No audio blob needed
     }
-  }, [transcript, onSpeechEnd, silenceTimer, handleTranscriptComplete]);
+  }, [onSpeechEnd, silenceTimer, handleTranscriptComplete]);
 
   const resetTranscript = useCallback(() => {
     if (silenceTimer) {

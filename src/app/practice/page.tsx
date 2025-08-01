@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -23,6 +23,7 @@ import {
 export default function PracticePage() {
   const [activeTab, setActiveTab] = useState('conversation');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
+  const [lastAIResponse, setLastAIResponse] = useState<string>('');
   
   const {
     messages,
@@ -59,9 +60,32 @@ export default function PracticePage() {
     setSelectedTopic(topic || '');
   };
 
-  const handleVoiceMessage = (audioBlob: Blob, transcript: string) => {
-    sendMessage(transcript, audioBlob);
+  const handleVoiceMessage = async (audioBlob: Blob, transcript: string) => {
+    await sendMessage(transcript, audioBlob);
   };
+  
+  // Monitor messages for new AI responses to trigger speech synthesis
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.role === 'assistant' && lastMessage.content !== lastAIResponse) {
+      setLastAIResponse(lastMessage.content);
+      
+      // Import and use browserSpeech to speak the AI response
+      import('@/lib/speech').then(({ browserSpeech }) => {
+        console.log('🔊 Speaking AI response:', lastMessage.content);
+        browserSpeech.speak(
+          lastMessage.content,
+          {}, // Use default voice settings
+          () => {
+            console.log('✅ Finished speaking AI response');
+          },
+          (error) => {
+            console.error('❌ Speech synthesis error:', error);
+          }
+        );
+      });
+    }
+  }, [messages, lastAIResponse]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
