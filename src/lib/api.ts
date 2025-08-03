@@ -117,7 +117,7 @@ class ApiClient {
     name?: string;
     level?: string;
     goals?: string[];
-    preferences?: Record<string, any>;
+    preferences?: Record<string, unknown>;
   }) {
     return this.request('/api/user/profile', {
       method: 'PUT',

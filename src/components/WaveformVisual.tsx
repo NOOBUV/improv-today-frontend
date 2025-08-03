@@ -1,241 +1,189 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Card } from '@/components/ui/card';
 
-interface WaveformVisualProps {
-  audioData?: number[];
-  isRecording?: boolean;
-  isPlaying?: boolean;
-  width?: number;
-  height?: number;
-  color?: string;
-  backgroundColor?: string;
+interface CircularWaveformProps {
+  isListening?: boolean;
+  isAISpeaking?: boolean;
+  onClick?: () => void;
+  size?: number;
   className?: string;
 }
 
-export default function WaveformVisual({
-  audioData = [],
-  isRecording = false,
-  isPlaying = false,
-  width = 400,
-  height = 100,
-  color = '#3B82F6',
-  backgroundColor = '#F3F4F6',
+export default function CircularWaveform({
+  isListening = false,
+  isAISpeaking = false,
+  onClick,
+  size = 200,
   className = '',
-}: WaveformVisualProps) {
+}: CircularWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
-  const [liveData, setLiveData] = useState<number[]>([]);
+  const animationRef = useRef<number | undefined>(undefined);
+  const [animationPhase, setAnimationPhase] = useState(0);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  // Generate random data for recording visualization
+  // Animation loop for dynamic waveform
   useEffect(() => {
-    if (isRecording) {
-      const generateLiveData = () => {
-        setLiveData(prev => {
-          const newData = [...prev];
-          // Add new random amplitude
-          newData.push(Math.random() * 0.8 + 0.1);
-          // Keep only last 100 points
-          if (newData.length > 100) {
-            newData.shift();
-          }
-          return newData;
-        });
-        
-        animationRef.current = requestAnimationFrame(generateLiveData);
-      };
-      
-      generateLiveData();
+    let active = true;
+
+    const animate = () => {
+      if (!active) return;
+
+      setAnimationPhase(prev => prev + 0.1);
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    if (isListening || isAISpeaking) {
+      animate();
     } else {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
-      setLiveData([]);
     }
 
     return () => {
+      active = false;
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isRecording]);
+  }, [isListening, isAISpeaking]);
 
-  // Draw waveform
+  // Draw circular waveform
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !isClient) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     // Set canvas size
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = size;
+    canvas.height = size;
 
     // Clear canvas
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, width, height);
+    ctx.clearRect(0, 0, size, size);
 
-    // Choose data source
-    const data = isRecording ? liveData : audioData;
-    if (data.length === 0) return;
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const baseRadius = size * 0.3;
 
-    // Calculate bar width
-    const barWidth = width / data.length;
-    const maxBarHeight = height * 0.8;
-    const centerY = height / 2;
+    // Draw outer circle background
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, baseRadius + 20, 0, 2 * Math.PI);
+    ctx.fillStyle = isListening ? 'rgba(59, 130, 246, 0.1)' : 
+                    isAISpeaking ? 'rgba(168, 85, 247, 0.1)' : 
+                    'rgba(156, 163, 175, 0.1)';
+    ctx.fill();
 
-    // Draw waveform bars
-    ctx.fillStyle = color;
-    
-    data.forEach((amplitude, index) => {
-      const barHeight = amplitude * maxBarHeight;
-      const x = index * barWidth;
-      const y = centerY - barHeight / 2;
+    // Draw animated waveform rings
+    const ringCount = 12;
+    for (let i = 0; i < ringCount; i++) {
+      const angle = (i / ringCount) * 2 * Math.PI;
       
-      // Add some variation for visual appeal
-      const actualBarWidth = Math.max(2, barWidth - 1);
-      
-      // Create gradient for bars
-      if (isRecording || isPlaying) {
-        const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
-        gradient.addColorStop(0, color);
-        gradient.addColorStop(1, color + '80'); // Add transparency
-        ctx.fillStyle = gradient;
+      // Calculate dynamic amplitude based on animation phase
+      let amplitude = 0;
+      if (isListening || isAISpeaking) {
+        amplitude = Math.sin(animationPhase + i * 0.5) * 0.3 + 0.7;
+        amplitude *= isListening ? 1.2 : 0.8; // Different intensity for listening vs speaking
+      } else {
+        amplitude = 0.4; // Static state
       }
       
-      ctx.fillRect(x, y, actualBarWidth, barHeight);
-    });
-
-    // Add glow effect when recording
-    if (isRecording) {
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
-      ctx.globalCompositeOperation = 'source-over';
+      const radius = baseRadius + (amplitude * 15);
+      const x = centerX + Math.cos(angle) * radius;
+      const y = centerY + Math.sin(angle) * radius;
+      
+      // Draw waveform point
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, 2 * Math.PI);
+      
+      if (isListening) {
+        ctx.fillStyle = `rgba(59, 130, 246, ${amplitude})`;
+      } else if (isAISpeaking) {
+        ctx.fillStyle = `rgba(168, 85, 247, ${amplitude})`;
+      } else {
+        ctx.fillStyle = `rgba(156, 163, 175, 0.6)`;
+      }
+      
+      ctx.fill();
     }
 
-  }, [audioData, liveData, isRecording, isPlaying, width, height, color, backgroundColor]);
+    // Draw center circle
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, baseRadius * 0.6, 0, 2 * Math.PI);
+    
+    if (isListening) {
+      const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, baseRadius * 0.6);
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.8)');
+      gradient.addColorStop(1, 'rgba(59, 130, 246, 0.3)');
+      ctx.fillStyle = gradient;
+    } else if (isAISpeaking) {
+      const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, baseRadius * 0.6);
+      gradient.addColorStop(0, 'rgba(168, 85, 247, 0.8)');
+      gradient.addColorStop(1, 'rgba(168, 85, 247, 0.3)');
+      ctx.fillStyle = gradient;
+    } else {
+      ctx.fillStyle = 'rgba(156, 163, 175, 0.4)';
+    }
+    
+    ctx.fill();
 
-  // Modern Audio Visualizer (like the component you showed)
-  const ModernAudioVisualizer = () => {
-    return (
-      <div className="flex items-center justify-center space-x-1 h-16">
-        {[...Array(5)].map((_, i) => (
-          <div
-            key={i}
-            className={`w-2 bg-gradient-to-t from-blue-400 to-purple-500 rounded-full transition-all duration-300 ${
-              isRecording || isPlaying ? 'animate-pulse' : ''
-            }`}
-            style={{
-              height: isRecording || isPlaying 
-                ? `${Math.random() * 40 + 20}px` 
-                : '20px',
-              animationDelay: `${i * 0.1}s`
-            }}
-          />
-        ))}
-      </div>
-    );
-  };
+    // Add glow effect when active
+    if (isListening || isAISpeaking) {
+      ctx.shadowColor = isListening ? '#3B82F6' : '#A855F7';
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, baseRadius * 0.6, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+  }, [size, animationPhase, isListening, isAISpeaking, isClient]);
 
   if (!isClient) {
     return (
-      <Card className={`p-4 ${className}`}>
-        <div className="flex justify-center items-center h-20 text-gray-400">
-          Loading waveform...
-        </div>
-      </Card>
+      <div className={`flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400"></div>
+      </div>
     );
   }
 
   return (
-    <Card className={`p-4 ${className}`}>
-      <div className="space-y-3">
-        {/* Modern Visualizer */}
-        <div className="text-center">
-          <ModernAudioVisualizer />
-        </div>
-        
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-gray-700">
-            {isRecording ? 'Recording' : isPlaying ? 'Playing' : 'Waveform'}
-          </h3>
-          
-          {/* Status indicator */}
-          <div className="flex items-center space-x-2">
-            {isRecording && (
-              <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                <span className="text-xs text-red-600">REC</span>
-              </div>
-            )}
-            
-            {isPlaying && (
-              <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-xs text-green-600">PLAY</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Canvas */}
-        <div className="flex justify-center">
-          <canvas
-            ref={canvasRef}
-            className="border border-gray-200 rounded-md"
-            style={{ 
-              width: `${width}px`, 
-              height: `${height}px`,
-              maxWidth: '100%',
-            }}
-          />
-        </div>
-
-        {/* Visualization Info */}
-        <div className="flex justify-between text-xs text-gray-500">
-          <span>
-            {isRecording 
-              ? `${liveData.length} samples` 
-              : `${audioData.length} data points`
-            }
-          </span>
-          
-          {audioData.length > 0 && !isRecording && (
-            <span>
-              Avg: {(audioData.reduce((a, b) => a + b, 0) / audioData.length).toFixed(2)}
-            </span>
+    <div className={`relative ${className}`}>
+      <canvas
+        ref={canvasRef}
+        className={`cursor-pointer transition-transform hover:scale-105 ${
+          onClick ? 'hover:opacity-80' : ''
+        }`}
+        onClick={onClick}
+        style={{ width: size, height: size }}
+      />
+      
+      {/* Status text overlay */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="text-center text-white">
+          {isListening && (
+            <div className="text-sm font-medium">
+              Listening...
+            </div>
+          )}
+          {isAISpeaking && (
+            <div className="text-sm font-medium">
+              Speaking...
+            </div>
+          )}
+          {!isListening && !isAISpeaking && onClick && (
+            <div className="text-sm font-medium opacity-70">
+              Tap to speak
+            </div>
           )}
         </div>
-
-        {/* Alternative visualization for no data */}
-        {audioData.length === 0 && !isRecording && (
-          <div className="flex justify-center items-center h-20 text-gray-400">
-            <div className="text-center">
-              <div className="flex space-x-1 mb-2">
-                {Array.from({ length: 20 }, (_, i) => (
-                  <div
-                    key={i}
-                    className="w-1 bg-gray-300 rounded-full"
-                    style={{ 
-                      height: `${(i % 5 + 1) * 4 + 10}px`, // Deterministic height based on index
-                      opacity: 0.3,
-                    }}
-                  />
-                ))}
-              </div>
-              <p className="text-xs">No audio data</p>
-            </div>
-          </div>
-        )}
       </div>
-    </Card>
+    </div>
   );
 }

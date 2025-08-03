@@ -38,7 +38,7 @@ export const useConversation = () => {
   const sessionStartRef = useRef<number>(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const startSession = useCallback((topic?: string) => {
+  const startSession = useCallback((topic?: string, skipWelcome?: boolean) => {
     sessionStartRef.current = Date.now();
     setState(prev => ({
       ...prev,
@@ -48,20 +48,22 @@ export const useConversation = () => {
       error: null,
     }));
 
-    // Add initial system message
-    const welcomeMessage: ConversationMessage = {
-      id: `msg-${Date.now()}`,
-      role: 'assistant',
-      content: topic 
-        ? `Great! Let's practice conversation about ${topic}. Feel free to start speaking whenever you're ready.`
-        : `Hello! I'm here to help you practice conversational English. What would you like to talk about today?`,
-      timestamp: new Date(),
-    };
+    // Only add welcome message if not skipped (for onboarding flow)
+    if (!skipWelcome) {
+      const welcomeMessage: ConversationMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: topic 
+          ? `Great! Let's practice conversation about ${topic}. Feel free to start speaking whenever you're ready.`
+          : `Hello! I'm here to help you practice conversational English. What would you like to talk about today?`,
+        timestamp: new Date(),
+      };
 
-    setState(prev => ({
-      ...prev,
-      messages: [welcomeMessage],
-    }));
+      setState(prev => ({
+        ...prev,
+        messages: [welcomeMessage],
+      }));
+    }
 
     // Start session timer
     intervalRef.current = setInterval(() => {
@@ -72,7 +74,7 @@ export const useConversation = () => {
     }, 1000);
   }, []);
 
-  const sendMessage = useCallback(async (content: string, audioBlob?: Blob) => {
+  const sendMessage = useCallback(async (content: string, audioBlob?: Blob, personality?: string) => {
     const userMessage: ConversationMessage = {
       id: `msg-${Date.now()}-user`,
       role: 'user',
@@ -93,7 +95,8 @@ export const useConversation = () => {
         message: content,
         target_vocabulary: [],
         session_type: 'daily',
-        topic: state.currentTopic || ''
+        topic: state.currentTopic || '',
+        personality: personality || 'friendly'
       };
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/conversation`, {
@@ -125,11 +128,33 @@ export const useConversation = () => {
       }));
 
     } catch (error) {
-      // Fallback response for development
+      // Generate personality-based fallback responses
+      const personalityResponses = {
+        sassy: [
+          `Oh, "${content}"? How utterly fascinating, darling! Do tell me more - I'm positively riveted!`,
+          `Right then, "${content}" - that's quite something, isn't it? Care to elaborate, love?`,
+          `Well, well, "${content}" - you've certainly caught my attention! What's the story behind that?`
+        ],
+        blunt: [
+          `"${content}" - okay, got it. What's your point exactly?`,
+          `So you mentioned "${content}". What are you trying to say about it?`,
+          `"${content}" - I hear you. But what's the real story here?`
+        ],
+        friendly: [
+          `That's really interesting about "${content}"! I'd love to hear more about your experience with that.`,
+          `"${content}" sounds fascinating! Could you share more details about what you think?`,
+          `Thank you for sharing about "${content}". What made you think of that topic?`
+        ]
+      };
+      
+      const currentPersonality = personality || 'friendly';
+      const responses = personalityResponses[currentPersonality as keyof typeof personalityResponses];
+      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      
       const fallbackResponse: ConversationMessage = {
         id: `msg-${Date.now()}-assistant`,
         role: 'assistant',
-        content: `That's interesting! Could you tell me more about "${content}"? I'd love to hear your thoughts on this topic.`,
+        content: randomResponse,
         timestamp: new Date(),
         feedback: {
           clarity: Math.floor(Math.random() * 30) + 70,
