@@ -1,13 +1,35 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import CircularWaveform from '@/components/WaveformVisual';
-import { useConversation } from '@/hooks/useConversation';
 import { Settings, X } from 'lucide-react';
 
-type Personality = 'sassy' | 'blunt' | 'friendly';
-type OnboardingStep = 'welcome' | 'name' | 'day' | 'complete';
+// Store imports
+import {
+  useConversationStore,
+  useConversationStatus,
+  useSessionData,
+  useUIState,
+  useSpeechState,
+  useMessages,
+  ConversationState,
+  type Personality,
+} from '@/store/conversationStore';
+import {
+  useSpeechStore,
+  useVoiceOptions,
+  useIsSpeechReady,
+} from '@/store/speechStore';
+import {
+  useUIStore,
+  useNotifications,
+  useModal,
+} from '@/store/uiStore';
+
+// Hook imports
+import { useConversationWithStores } from '@/hooks/useWebSocketIntegration';
+import { useSpeechCoordinator } from '@/hooks/useSpeechCoordinator';
 
 const personalities = {
   sassy: {
@@ -31,235 +53,235 @@ const personalities = {
 };
 
 export default function PracticePage() {
-  const [selectedPersonality, setSelectedPersonality] = useState<Personality>('friendly');
-  const [isFirstTime, setIsFirstTime] = useState(true);
-  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('welcome');
-  const [userName, setUserName] = useState<string>('');
-  const [isListening, setIsListening] = useState(false);
-  const [isAISpeaking, setIsAISpeaking] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [lastAIResponse, setLastAIResponse] = useState<string>('');
-  const [transcript, setTranscript] = useState('');
-  const [interimTranscript, setInterimTranscript] = useState('');
-  const [silenceTimer, setSilenceTimer] = useState<NodeJS.Timeout | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState<string>('');
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [browserSpeech, setBrowserSpeech] = useState<{
-    speak: (text: string, options?: Record<string, unknown>, onEnd?: () => void, onError?: (error: string) => void) => void;
-    startListening: (onResult: (result: { isFinal: boolean; transcript: string }) => void, onError: (error: string) => void) => void;
-    stopListening: () => void;
-    stopSpeaking: () => void;
-    isAvailable: () => boolean;
-    getVoices: () => SpeechSynthesisVoice[];
-    setVoice: (voice: SpeechSynthesisVoice | null) => void;
-  } | null>(null);
+  // Store hooks
+  const conversationStore = useConversationStore();
+  const speechStore = useSpeechStore();
+  const uiStore = useUIStore();
   
-  const {
-    messages,
-    isProcessing,
-    sendMessage,
-    startSession,
-  } = useConversation();
+  // Store selectors - memoized to prevent unnecessary re-renders
+  const conversationStatus = useConversationStatus();
+  const sessionData = useSessionData();
+  const uiState = useUIState();
+  const speechState = useSpeechState();
+  const messages = useMessages();
+  const voiceOptions = useVoiceOptions();
+  const isSpeechReady = useIsSpeechReady();
+  const notifications = useNotifications();
+  const modal = useModal();
+  
+  // Memoize derived values to prevent recalculation
+  const isFirstTimeWelcome = useMemo(() => {
+    return sessionData?.isFirstTime && sessionData?.onboardingStep === 'welcome' && conversationStatus?.canStart;
+  }, [sessionData?.isFirstTime, sessionData?.onboardingStep, conversationStatus?.canStart]);
+  
+  const isFirstTimeName = useMemo(() => {
+    return sessionData?.isFirstTime && sessionData?.onboardingStep === 'name' && conversationStatus?.canStart;
+  }, [sessionData?.isFirstTime, sessionData?.onboardingStep, conversationStatus?.canStart]);
+  
+  // Enhanced conversation hook with stores
+  const { sendMessage, startSession } = useConversationWithStores();
+  
+  // Speech coordinator with mutex protection
+  const speechCoordinator = useSpeechCoordinator({
+    autoInitialize: true,
+    debugMode: process.env.NODE_ENV === 'development',
+  });
 
-  // Check first-time user status and load user data
+  // Initialize stores on mount - only run once
   useEffect(() => {
-    // Check localStorage for first-time status
-    const hasVisited = localStorage.getItem('improv-today-visited');
-    const storedUserName = sessionStorage.getItem('improv-today-username');
-    
-    if (hasVisited && storedUserName) {
-      setIsFirstTime(false);
-      setUserName(storedUserName);
-      setOnboardingStep('complete');
-    } else if (hasVisited) {
-      setIsFirstTime(false);
-      setOnboardingStep('complete');
-    } else {
-      setIsFirstTime(true);
-      setOnboardingStep('welcome');
-    }
-  }, []);
+    conversationStore.initializeSession();
+    speechStore.initializeSpeech();
+  }, []); // Empty dependency array to run only once on mount
 
-  // Load browser speech dynamically
-  useEffect(() => {
-    import('@/lib/speech').then(({ browserSpeech }) => {
-      setBrowserSpeech(browserSpeech);
-      
-      // Load available voices
-      const loadVoices = () => {
-        // Force voice loading by calling getVoices multiple times
-        let voices = speechSynthesis.getVoices();
-        if (voices.length === 0) {
-          // Try again after a delay
-          setTimeout(() => {
-            voices = speechSynthesis.getVoices();
-            processVoices(voices);
-          }, 100);
-        } else {
-          processVoices(voices);
-        }
-      };
-
-      const processVoices = (voices: SpeechSynthesisVoice[]) => {
-        const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
-        
-        // Curate best quality voices from your available system voices
-        const curatedVoices = englishVoices.filter(voice => {
-          const voiceName = voice.name.toLowerCase();
-          
-          // Exclude novelty/fun voices that have poor quality
-          const noveltyVoices = ['bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos', 'jester', 'organ', 'superstar', 'trinoids', 'whisper', 'wobble', 'zarvox', 'good news'];
-          const isNovelty = noveltyVoices.some(novelty => voiceName.includes(novelty));
-          
-          // Exclude obvious male voices
-          const maleIndicators = ['arthur', 'daniel', 'rishi', 'aaron', 'albert', 'fred', 'gordon', 'grandpa', 'junior', 'ralph', 'reed', 'rocko', 'sylvester'];
-          const isMale = maleIndicators.some(name => voiceName.includes(name));
-          
-          return !isNovelty && !isMale;
-        });
-        
-        // Sort to prioritize best voices
-        curatedVoices.sort((a, b) => {
-          const aName = a.name.toLowerCase();
-          const bName = b.name.toLowerCase();
-          
-          // Prioritize Samantha (top quality)
-          if (aName.includes('samantha')) return -1;
-          if (bName.includes('samantha')) return 1;
-          
-          // Then UK voices
-          if (a.lang.includes('GB') && !b.lang.includes('GB')) return -1;
-          if (b.lang.includes('GB') && !a.lang.includes('GB')) return 1;
-          
-          // Then specific good voices
-          const goodVoices = ['flo', 'martha', 'sandy', 'shelley', 'catherine', 'karen', 'moira', 'tessa'];
-          const aIsGood = goodVoices.some(good => aName.includes(good));
-          const bIsGood = goodVoices.some(good => bName.includes(good));
-          
-          if (aIsGood && !bIsGood) return -1;
-          if (bIsGood && !aIsGood) return 1;
-          
-          return 0;
-        });
-        
-        
-        // Use curated voices if available, otherwise show top 10 English voices
-        const voicesToUse = curatedVoices.length > 0 ? curatedVoices : englishVoices.slice(0, 10);
-        setAvailableVoices(voicesToUse);
-        
-        // Set default voice - prioritize Samantha, then UK female voices
-        let defaultVoice = voicesToUse.find(voice => 
-          voice.name.toLowerCase().includes('samantha')
-        );
-        
-        if (!defaultVoice) {
-          // Look for UK female voices
-          defaultVoice = voicesToUse.find(voice => 
-            voice.lang.includes('GB') && 
-            (voice.name.toLowerCase().includes('flo') || 
-             voice.name.toLowerCase().includes('martha') ||
-             voice.name.toLowerCase().includes('sandy') ||
-             voice.name.toLowerCase().includes('shelley'))
-          );
-        }
-        
-        if (!defaultVoice && voicesToUse.length > 0) {
-          defaultVoice = voicesToUse[0];
-        }
-        
-        if (defaultVoice) {
-          setSelectedVoice(defaultVoice.name);
-          browserSpeech.setVoice(defaultVoice);
-        }
-      };
-      
-      // Load voices immediately
-      loadVoices();
-      
-      // Also listen for voice loading event (some browsers load voices asynchronously)
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = loadVoices;
-      }
-    });
-  }, []);
-
-  // Get appropriate message based on onboarding step
-  const getOnboardingMessage = (step: OnboardingStep): string => {
+  // Get onboarding message based on step
+  const getOnboardingMessage = useCallback((step: string): string => {
     switch (step) {
       case 'welcome':
         return "Hello! What's your name?";
       case 'name':
-        return `Nice to meet you, ${userName}! How was your day?`;
+        return `Nice to meet you, ${sessionData?.userName}! How was your day?`;
       case 'day':
         return "Great! What would you like to talk about today?";
       default:
-        return userName ? `Hi ${userName}! What would you like to talk about today?` : "What would you like to talk about today?";
+        return sessionData?.userName 
+          ? `Hi ${sessionData.userName}! What would you like to talk about today?` 
+          : "What would you like to talk about today?";
     }
-  };
+  }, [sessionData?.userName]);
 
-  const startListening = useCallback(() => {
+  // Define functions in dependency order to avoid circular references
+  
+  // First, define the simplest functions with no internal dependencies
+  const clearSilenceTimer = useCallback(() => {
+    if (speechState.silenceTimer) {
+      console.log('Clearing silence timer');
+      clearTimeout(speechState.silenceTimer);
+      conversationStore.setSilenceTimer(null);
+    }
+  }, [speechState.silenceTimer, conversationStore]);
+
+  // Define startListening first
+  const startListening = useCallback(async () => {
     console.log('startListening called');
-    if (!browserSpeech || !browserSpeech.isAvailable()) {
-      alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
+    
+    if (!speechCoordinator.isReady) {
+      uiStore.addNotification({
+        type: 'error',
+        title: 'Speech Not Available',
+        message: 'Speech recognition is not supported in your browser. Please use Chrome or Edge.',
+        duration: 5000,
+      });
       return;
     }
 
-    console.log('Starting speech recognition...');
-    setIsListening(true);
-    setIsPaused(false);
-    setTranscript('');
-    setInterimTranscript('');
+    console.log('Starting speech recognition with mutex...');
     
-    browserSpeech.startListening(
-      (result: { isFinal: boolean; transcript: string; confidence?: number }) => {
-        console.log('Speech recognition result:', { isFinal: result.isFinal, transcript: result.transcript });
-        if (result.isFinal) {
-          const finalTranscript = result.transcript.trim();
-          console.log('Final transcript received:', finalTranscript);
-          if (finalTranscript) {
-            setTranscript(prev => {
-              const newTranscript = prev ? prev + ' ' + finalTranscript : finalTranscript;
-              console.log('Updated transcript state to:', newTranscript);
-              return newTranscript;
-            });
-            setInterimTranscript('');
-            
-            // Start silence timer
-            startSilenceTimer();
+    try {
+      await speechCoordinator.startListening({
+        onResult: (result) => {
+          console.log('Speech recognition result:', result);
+          if (result.isFinal) {
+            const finalTranscript = result.transcript.trim();
+            console.log('Final transcript received:', finalTranscript);
+            if (finalTranscript) {
+              conversationStore.updateTranscript(finalTranscript);
+              // Call startSilenceTimer directly to avoid dependency issues
+              console.log('Starting silence timer (3 seconds)...');
+              
+              // Clear existing timer first
+              const currentTimer = conversationStore.speech.silenceTimer;
+              if (currentTimer) {
+                clearTimeout(currentTimer);
+              }
+              
+              const timer = setTimeout(() => {
+                console.log('Silence timer triggered - stopping listening');
+                console.log('Current transcript in store:', conversationStore.speech.transcript);
+                
+                // Stop listening using coordinator to ensure proper mutex handling
+                speechCoordinator.stopListening();
+                
+                // Also transition the store state to IDLE
+                conversationStore.stopListening();
+                
+                const currentTranscript = conversationStore.speech.transcript.trim();
+                console.log('Trimmed transcript:', currentTranscript, 'length:', currentTranscript.length);
+                
+                if (currentTranscript) {
+                  console.log('Processing transcript:', currentTranscript);
+                  
+                  // Handle onboarding or normal conversation
+                  if (conversationStore.session.isFirstTime && conversationStore.session.onboardingStep !== 'complete') {
+                    console.log('Handling onboarding response');
+                    // Handle onboarding response inline
+                    switch (conversationStore.session.onboardingStep) {
+                      case 'welcome':
+                        // User provided their name
+                        const name = currentTranscript.trim();
+                        conversationStore.setUserName(name);
+                        conversationStore.setOnboardingStep('name');
+                        
+                        // Give AI a moment, then ask about their day
+                        setTimeout(async () => {
+                          if (!speechCoordinator.isReady) return;
+                          
+                          const message = getOnboardingMessage('name');
+                          
+                          try {
+                            await speechCoordinator.speak(message, undefined, {
+                              onEnd: () => {
+                                console.log('Onboarding AI finished speaking, auto-starting listening...');
+                                setTimeout(() => {
+                                  if (!speechState.isPaused && !conversationStatus.isListening) {
+                                    startListening();
+                                  }
+                                }, 500);
+                              },
+                            }, 'high');
+                          } catch (error) {
+                            console.error('Failed to speak onboarding message:', error);
+                          }
+                        }, 1000);
+                        break;
+                        
+                      case 'name':
+                        // User told about their day, now start normal conversation
+                        conversationStore.setOnboardingStep('day');
+                        conversationStore.completeOnboarding();
+                        
+                        // Start the actual session without welcome message, and send the day info as first message
+                        startSession(undefined, true);
+                        sendMessage(`My name is ${conversationStore.session.userName}. ${currentTranscript}`, undefined, conversationStore.session.selectedPersonality);
+                        break;
+                        
+                      default:
+                        // Shouldn't reach here, but handle gracefully
+                        sendMessage(currentTranscript, undefined, conversationStore.session.selectedPersonality);
+                        break;
+                    }
+                  } else {
+                    console.log('Sending message to backend');
+                    sendMessage(currentTranscript, undefined, conversationStore.session.selectedPersonality);
+                  }
+                  
+                  conversationStore.clearTranscript();
+                }
+              }, 3000); // 3 seconds of silence
+              
+              conversationStore.setSilenceTimer(timer);
+            }
+          } else {
+            conversationStore.updateTranscript(result.transcript, true);
+            clearSilenceTimer();
           }
-        } else {
+        },
+        onError: (error) => {
+          console.error('Speech recognition error:', error);
+          conversationStore.setError(`Speech recognition error: ${error}`);
           clearSilenceTimer();
-          setInterimTranscript(result.transcript);
-        }
-      },
-      () => {
-        setIsListening(false);
-        clearSilenceTimer();
-      }
-    );
-  }, [browserSpeech]);
+        },
+        onStart: () => {
+          console.log('Speech recognition started');
+        },
+        onEnd: () => {
+          console.log('Speech recognition ended');
+        },
+      }, 'high'); // High priority for user speech
+    } catch (error) {
+      console.error('Failed to start listening:', error);
+      uiStore.addNotification({
+        type: 'error',
+        title: 'Speech Error',
+        message: error instanceof Error ? error.message : 'Failed to start listening',
+        duration: 3000,
+      });
+    }
+  }, [speechCoordinator, conversationStore, uiStore, clearSilenceTimer, speechState.isPaused, conversationStatus.isListening, getOnboardingMessage, startSession, sendMessage]);
 
-  // Stable auto-start listening function
+  // Define autoStartListening that uses startListening
   const autoStartListening = useCallback(() => {
-    console.log('autoStartListening called, isPaused:', isPaused, 'isListening:', isListening);
-    if (!isPaused && !isListening) {
+    console.log('autoStartListening called', { 
+      isPaused: speechState.isPaused, 
+      isListening: conversationStatus.isListening 
+    });
+    
+    if (!speechState.isPaused && !conversationStatus.isListening) {
       console.log('Auto-starting listening...');
       startListening();
     }
-  }, [isPaused, isListening, startListening]);
+  }, [speechState.isPaused, conversationStatus.isListening, startListening]);
 
-  // Handle onboarding flow
-  const handleOnboardingStep = useCallback(() => {
-    if (!browserSpeech) return;
+  // Handle onboarding flow with mutex protection - defined after dependencies
+  const handleOnboardingStep = useCallback(async () => {
+    if (!speechCoordinator.isReady) return;
     
     let message = '';
     
-    if (isFirstTime) {
-      message = getOnboardingMessage(onboardingStep);
+    if (sessionData?.isFirstTime) {
+      message = getOnboardingMessage(sessionData.onboardingStep);
       
       // Mark as visited after first interaction
-      if (onboardingStep === 'welcome') {
+      if (sessionData.onboardingStep === 'welcome') {
         localStorage.setItem('improv-today-visited', 'true');
       }
     } else {
@@ -268,198 +290,129 @@ export default function PracticePage() {
       startSession(undefined, true); // Skip backend welcome message
     }
     
-    // Speak message
-    setIsAISpeaking(true);
-    
-    const timeout = setTimeout(() => {
-      setIsAISpeaking(false);
-    }, 10000);
-    
-    browserSpeech.speak(
-      message,
-      {},
-      () => {
-        clearTimeout(timeout);
-        setIsAISpeaking(false);
-        // Auto-start listening after AI finishes speaking
-        console.log('Onboarding AI finished speaking, auto-starting listening...');
-        setTimeout(() => {
-          autoStartListening();
-        }, 500);
-      },
-      () => {
-        clearTimeout(timeout);
-        setIsAISpeaking(false);
-        // Auto-start listening even on error
-        console.log('Onboarding AI speech error, auto-starting listening...');
-        setTimeout(() => {
-          autoStartListening();
-        }, 500);
-      }
-    );
-  }, [browserSpeech, isFirstTime, onboardingStep, userName, autoStartListening, startSession]);
-
-  // Monitor messages for new AI responses to trigger speech synthesis
-  useEffect(() => {
-    if (!browserSpeech || isAISpeaking) return; // Prevent multiple simultaneous speech
-    
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage && lastMessage.role === 'assistant' && lastMessage.content !== lastAIResponse) {
-      setLastAIResponse(lastMessage.content);
-      
-      setIsAISpeaking(true);
-      
-      // Fallback timeout to reset speaking state (in case onEnd doesn't fire)
-      const fallbackTimeout = setTimeout(() => {
-        setIsAISpeaking(false);
-        // Fallback auto-start listening if onEnd doesn't fire
-        autoStartListening();
-      }, Math.max(lastMessage.content.length * 150, 15000)); // Longer estimate, min 15 seconds
-      
-      browserSpeech.speak(
-        lastMessage.content,
-        {},
-        () => {
-          clearTimeout(fallbackTimeout);
-          setIsAISpeaking(false);
-          // Auto-start listening after AI response
-          console.log('AI finished speaking, auto-starting listening...');
+    // Use speech coordinator with mutex protection
+    try {
+      await speechCoordinator.speak(message, undefined, {
+        onStart: () => {
+          console.log('Onboarding AI started speaking');
+        },
+        onEnd: () => {
+          console.log('Onboarding AI finished speaking, auto-starting listening...');
           setTimeout(() => {
             autoStartListening();
           }, 500);
         },
-        () => {
-          clearTimeout(fallbackTimeout);
-          setIsAISpeaking(false);
-          // Auto-start listening even on error
-          console.log('AI speech error, auto-starting listening...');
+        onError: (error) => {
+          console.log('Onboarding AI speech error, auto-starting listening...');
+          uiStore.addNotification({
+            type: 'error',
+            title: 'Speech Error',
+            message: `Failed to speak: ${error}`,
+            duration: 3000,
+          });
           setTimeout(() => {
             autoStartListening();
           }, 500);
-        }
-      );
+        },
+      }, 'high'); // High priority for onboarding
+    } catch (error) {
+      console.error('Failed to speak onboarding message:', error);
+      uiStore.addNotification({
+        type: 'error',
+        title: 'Speech Error',
+        message: error instanceof Error ? error.message : 'Failed to speak',
+        duration: 3000,
+      });
+      // Still try to auto-start listening
+      setTimeout(() => {
+        autoStartListening();
+      }, 500);
     }
-  }, [messages, lastAIResponse, browserSpeech, isAISpeaking, autoStartListening]);
+  }, [speechCoordinator, sessionData, getOnboardingMessage, startSession, uiStore, autoStartListening]);
 
-  const handleWaveformClick = () => {
-    if (!browserSpeech) return;
+  // Monitor messages for new AI responses to trigger speech synthesis
+  useEffect(() => {
+    if (!isSpeechReady || conversationStatus.isAISpeaking) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.role === 'assistant') {
+      // The speech synthesis is handled by the WebSocket integration hook
+      // or the conversation hook, so we don't need to duplicate it here
+      console.log('New AI message received:', lastMessage.content);
+    }
+  }, [messages, isSpeechReady, conversationStatus.isAISpeaking]);
+
+  // Handle waveform click with state machine
+  const handleWaveformClick = useCallback(() => {
+    console.log('Waveform clicked, current state:', conversationStatus.currentState);
+    console.log('IsAISpeaking before click:', conversationStatus.isAISpeaking);
+    
+    const state = conversationStore;
+    const { currentState, session } = conversationStore;
     
     // Handle onboarding flow for first-time users
-    if (isFirstTime && onboardingStep !== 'complete') {
-      if (!isListening && !isAISpeaking) {
+    if (session.isFirstTime && session.onboardingStep !== 'complete') {
+      if (currentState === ConversationState.IDLE) {
         handleOnboardingStep();
         return;
       }
     }
     
-    // Pause/Continue functionality
-    if (isListening) {
-      // Pause listening
-      setIsPaused(true);
-      setIsListening(false);
-      browserSpeech.stopListening();
-      clearSilenceTimer();
-    } else if (isPaused) {
-      // Continue listening
-      setIsPaused(false);
-      startListening();
-    } else if (isAISpeaking) {
-      // Interrupt AI speaking and start listening
-      browserSpeech.stopSpeaking();
-      setIsAISpeaking(false);
-      startListening();
-    } else {
-      // Start conversation (for returning users)
-      if (!isFirstTime) {
-        handleOnboardingStep();
-      }
-    }
-  };
-
-  const stopListening = () => {
-    if (!browserSpeech) return;
-    
-    console.log('stopListening called, transcript:', transcript);
-    setIsListening(false);
-    setIsPaused(false);
-    browserSpeech.stopListening();
-    clearSilenceTimer();
-    
-    if (transcript.trim()) {
-      console.log('Processing transcript:', transcript.trim());
-      // Handle onboarding steps
-      if (isFirstTime && onboardingStep !== 'complete') {
-        console.log('Handling onboarding response');
-        handleOnboardingResponse(transcript.trim());
-      } else {
-        console.log('Sending message to backend');
-        // Normal conversation
-        sendMessage(transcript, undefined, selectedPersonality);
-      }
-      setTranscript('');
-      setInterimTranscript('');
-    } else {
-      console.log('No transcript to process');
-    }
-  };
-
-  // Process onboarding responses
-  const handleOnboardingResponse = (response: string) => {
-    switch (onboardingStep) {
-      case 'welcome':
-        // User provided their name
-        const name = response.trim();
-        setUserName(name);
-        sessionStorage.setItem('improv-today-username', name);
-        setOnboardingStep('name');
-        
-        // Give AI a moment, then ask about their day
-        setTimeout(() => {
-          handleOnboardingStep();
-        }, 1000);
+    // Handle different states
+    switch (currentState) {
+      case ConversationState.LISTENING:
+        conversationStore.pauseListening();
         break;
         
-      case 'name':
-        // User told about their day, now start normal conversation
-        setOnboardingStep('day');
-        setIsFirstTime(false);
+      case ConversationState.PAUSED:
+        conversationStore.resumeListening();
+        break;
         
-        // Start the actual session without welcome message, and send the day info as first message
-        startSession(undefined, true);
-        sendMessage(`My name is ${userName}. ${response}`, undefined, selectedPersonality);
+      case ConversationState.AI_SPEAKING:
+        // Interrupt AI and start listening
+        if (conversationStore.canTransitionTo(ConversationState.LISTENING, 'INTERRUPT_AI')) {
+          conversationStore.transitionTo(ConversationState.LISTENING, 'INTERRUPT_AI');
+        }
+        break;
+        
+      case ConversationState.IDLE:
+        if (!session.isFirstTime) {
+          handleOnboardingStep(); // For returning users
+        } else {
+          conversationStore.startListening();
+        }
         break;
         
       default:
-        // Shouldn't reach here, but handle gracefully
-        sendMessage(response, undefined, selectedPersonality);
+        // Try to force reset to idle
+        if (conversationStore.canTransitionTo(ConversationState.IDLE, 'FORCE_RESET')) {
+          conversationStore.transitionTo(ConversationState.IDLE, 'FORCE_RESET');
+        }
         break;
     }
-  };
+  }, [conversationStore, conversationStatus, handleOnboardingStep]);
 
-  const startSilenceTimer = () => {
-    console.log('Starting silence timer (3 seconds)...');
-    clearSilenceTimer();
-    const timer = setTimeout(() => {
-      console.log('Silence timer triggered - stopping listening');
-      stopListening();
-    }, 3000); // 3 seconds of silence
-    setSilenceTimer(timer);
-  };
+  // Functions are now defined earlier to resolve dependency order
 
-  const clearSilenceTimer = () => {
-    if (silenceTimer) {
-      console.log('Clearing silence timer');
-      clearTimeout(silenceTimer);
-      setSilenceTimer(null);
+  // Handle voice selection
+  const handleVoiceChange = useCallback((voiceName: string) => {
+    const voice = voiceOptions.voices.find(v => v.name === voiceName);
+    if (voice) {
+      speechStore.setVoice(voice);
     }
-  };
+  }, [voiceOptions.voices, speechStore]);
+
+  // Test selected voice
+  const testVoice = useCallback(() => {
+    speechStore.testVoice();
+  }, [speechStore]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-4 relative">
       {/* Settings Icon - Top Right */}
       <div className="absolute top-6 right-6">
         <Button
-          onClick={() => setShowSettings(true)}
+          onClick={() => uiStore.openModal({ type: 'settings', title: 'Voice & Settings' })}
           variant="ghost"
           size="sm"
           className="text-white hover:bg-white/20 p-3"
@@ -481,8 +434,8 @@ export default function PracticePage() {
       {/* Main Circular Waveform */}
       <div className="mb-8">
         <CircularWaveform
-          isListening={isListening}
-          isAISpeaking={isAISpeaking}
+          isListening={conversationStatus.isListening}
+          isAISpeaking={conversationStatus.isAISpeaking}
           onClick={handleWaveformClick}
           size={250}
           className="mb-4"
@@ -490,45 +443,51 @@ export default function PracticePage() {
         
         {/* Status - Fixed height to prevent layout shift */}
         <div className="text-center text-white h-24 flex flex-col justify-center">
-          {isFirstTime && onboardingStep === 'welcome' && !isAISpeaking && !isListening && !isPaused && (
+          {isFirstTimeWelcome && (
             <div>
               <p className="text-blue-300 mb-2">👋 Welcome to Improv.Today!</p>
               <p className="text-gray-400 text-sm">Tap the waveform to begin</p>
             </div>
           )}
-          {isFirstTime && onboardingStep === 'name' && !isAISpeaking && !isListening && !isPaused && (
+          {isFirstTimeName && (
             <div>
               <p className="text-blue-300 mb-2">Tell me about your day</p>
               <p className="text-gray-400 text-sm">Listening will start automatically</p>
             </div>
           )}
-          {isAISpeaking && (
+          {conversationStatus.isAISpeaking && (
             <p className="text-purple-300">AI is speaking... Tap to interrupt</p>
           )}
-          {isListening && (
+          {conversationStatus.isListening && (
             <div className="max-w-md mx-auto">
               <p className="text-blue-300">
-                {isFirstTime && onboardingStep === 'welcome' ? 'What\'s your name?' :
-                 isFirstTime && onboardingStep === 'name' ? 'Tell me about your day' :
+                {sessionData.isFirstTime && sessionData.onboardingStep === 'welcome' ? 'What\'s your name?' :
+                 sessionData.isFirstTime && sessionData.onboardingStep === 'name' ? 'Tell me about your day' :
                  'Listening... Tap to pause'}
               </p>
               <div className="min-h-[2rem] mt-2">
-                {(transcript || interimTranscript) && (
+                {(speechState.transcript || speechState.interimTranscript) && (
                   <p className="text-gray-300 text-sm italic break-words">
-                    &quot;{transcript}{interimTranscript && ` ${interimTranscript}`}&quot;
+                    &quot;{speechState.transcript}{speechState.interimTranscript && ` ${speechState.interimTranscript}`}&quot;
                   </p>
                 )}
               </div>
             </div>
           )}
-          {isPaused && (
+          {conversationStatus.isPaused && (
             <div>
               <p className="text-yellow-300">Paused</p>
               <p className="text-gray-400 text-sm">Tap to continue listening</p>
             </div>
           )}
-          {!isListening && !isAISpeaking && !isFirstTime && !isPaused && (
+          {conversationStatus.canStart && !sessionData.isFirstTime && (
             <p className="text-gray-400">Tap the waveform to start conversation</p>
+          )}
+          {conversationStatus.isError && uiState.error && (
+            <div>
+              <p className="text-red-300">Error occurred</p>
+              <p className="text-gray-400 text-sm">{uiState.error}</p>
+            </div>
           )}
         </div>
       </div>
@@ -544,10 +503,10 @@ export default function PracticePage() {
           {Object.entries(personalities).map(([key, personality]) => (
             <Button
               key={key}
-              onClick={() => setSelectedPersonality(key as Personality)}
-              variant={selectedPersonality === key ? "default" : "outline"}
+              onClick={() => conversationStore.setPersonality(key as Personality)}
+              variant={sessionData.selectedPersonality === key ? "default" : "outline"}
               className={`h-auto p-4 text-left justify-start transition-all ${
-                selectedPersonality === key 
+                sessionData.selectedPersonality === key 
                   ? `bg-gradient-to-r ${personality.color} text-white hover:opacity-90`
                   : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
               }`}
@@ -564,13 +523,13 @@ export default function PracticePage() {
       </div>
 
       {/* Settings Modal */}
-      {showSettings && (
+      {modal.isOpen && modal.type === 'settings' && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900">Voice & Settings</h2>
               <Button
-                onClick={() => setShowSettings(false)}
+                onClick={() => uiStore.closeModal()}
                 variant="ghost"
                 size="sm"
                 className="text-gray-500 hover:text-gray-700"
@@ -585,20 +544,14 @@ export default function PracticePage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">Choose Voice:</label>
                 <select
-                  value={selectedVoice}
-                  onChange={(e) => {
-                    setSelectedVoice(e.target.value);
-                    const voice = availableVoices.find(v => v.name === e.target.value);
-                    if (voice && browserSpeech) {
-                      browserSpeech.setVoice(voice);
-                    }
-                  }}
+                  value={voiceOptions.selected}
+                  onChange={(e) => handleVoiceChange(e.target.value)}
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  {availableVoices.length === 0 ? (
+                  {voiceOptions.voices.length === 0 ? (
                     <option>Loading voices...</option>
                   ) : (
-                    availableVoices.map((voice) => (
+                    voiceOptions.voices.map((voice) => (
                       <option key={voice.name} value={voice.name}>
                         {voice.name} ({voice.lang})
                       </option>
@@ -606,17 +559,13 @@ export default function PracticePage() {
                   )}
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
-                  Available voices: {availableVoices.length}
+                  Available voices: {voiceOptions.voices.length}
                 </p>
               </div>
 
               {/* Voice Test */}
               <Button
-                onClick={() => {
-                  if (browserSpeech) {
-                    browserSpeech.speak('Hello, this is a test of the selected voice.');
-                  }
-                }}
+                onClick={testVoice}
                 className="mt-3 w-full"
                 variant="outline"
               >
@@ -631,8 +580,8 @@ export default function PracticePage() {
                 {Object.entries(personalities).map(([key, personality]) => (
                   <Button
                     key={key}
-                    onClick={() => setSelectedPersonality(key as Personality)}
-                    variant={selectedPersonality === key ? "default" : "outline"}
+                    onClick={() => conversationStore.setPersonality(key as Personality)}
+                    variant={sessionData.selectedPersonality === key ? "default" : "outline"}
                     className="w-full text-left justify-start h-auto p-3"
                   >
                     <div className="w-full">
@@ -648,7 +597,7 @@ export default function PracticePage() {
 
             {/* Close Button */}
             <Button
-              onClick={() => setShowSettings(false)}
+              onClick={() => uiStore.closeModal()}
               className="w-full"
             >
               Done
@@ -658,10 +607,40 @@ export default function PracticePage() {
       )}
 
       {/* Processing indicator */}
-      {isProcessing && (
+      {conversationStatus.isProcessing && (
         <div className="mt-4 flex items-center space-x-2 text-white">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
           <span className="text-sm">Processing...</span>
+        </div>
+      )}
+
+      {/* Notifications */}
+      {notifications.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 space-y-2">
+          {notifications.slice(-3).map((notification) => (
+            <div
+              key={notification.id}
+              className={`p-4 rounded-lg shadow-lg max-w-sm ${
+                notification.type === 'error' ? 'bg-red-500 text-white' :
+                notification.type === 'warning' ? 'bg-yellow-500 text-white' :
+                notification.type === 'success' ? 'bg-green-500 text-white' :
+                'bg-blue-500 text-white'
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <h4 className="font-semibold">{notification.title}</h4>
+                  <p className="text-sm">{notification.message}</p>
+                </div>
+                <button
+                  onClick={() => uiStore.removeNotification(notification.id)}
+                  className="ml-2 text-white/80 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

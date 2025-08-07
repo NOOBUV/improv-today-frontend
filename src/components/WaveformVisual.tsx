@@ -17,6 +17,11 @@ export default function CircularWaveform({
   size = 200,
   className = '',
 }: CircularWaveformProps) {
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('Waveform props changed:', { isListening, isAISpeaking });
+  }, [isListening, isAISpeaking]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | undefined>(undefined);
   const [animationPhase, setAnimationPhase] = useState(0);
