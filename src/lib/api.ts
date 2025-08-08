@@ -27,7 +27,7 @@ class ApiClient {
         ...options,
       };
 
-      const response = await fetch(url, config);
+      const response = await fetch(url, { ...config, credentials: 'include' });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -59,16 +59,13 @@ class ApiClient {
   }
 
   // Conversation endpoints
-  async sendConversationMessage(message: string, audioBlob?: Blob, topic?: string) {
-    const formData = new FormData();
-    formData.append('message', message);
-    if (topic) formData.append('topic', topic);
-    if (audioBlob) formData.append('audio', audioBlob, 'recording.webm');
-
+  async sendConversationMessage(message: string, topic?: string, personality?: string, sessionId?: number, lastAiReply?: string) {
     try {
       const response = await fetch(`${this.baseUrl}/api/conversation`, {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ message, topic, personality, session_id: sessionId, last_ai_reply: lastAiReply }),
       });
 
       if (!response.ok) {
@@ -86,6 +83,29 @@ class ApiClient {
 
   async getConversationHistory(limit = 10) {
     return this.request(`/api/conversation/history?limit=${limit}`);
+  }
+
+  // Sessions (minimal loop)
+  async startSession(params: { personality?: string; topic?: string } = {}) {
+    return this.request('/api/sessions/start', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_type: 'practice',
+        topic: params.topic ?? null,
+        personality: params.personality ?? 'friendly',
+      }),
+    });
+  }
+
+  async endSession(sessionId: number) {
+    return this.request('/api/sessions/end', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
   }
 
   // Speech analysis removed - using browser APIs only

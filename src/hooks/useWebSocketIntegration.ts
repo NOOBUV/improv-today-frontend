@@ -5,6 +5,7 @@ import { useConversationStore, ConversationState } from '@/store/conversationSto
 import { useSpeechStore } from '@/store/speechStore';
 import { useUIStore } from '@/store/uiStore';
 import { useSpeechCoordinator } from '@/hooks/useSpeechCoordinator';
+import { apiClient } from '@/lib/api';
 
 // ===== TYPES =====
 
@@ -480,6 +481,7 @@ export const useConversationWithStores = () => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(requestBody),
+          credentials: 'include',
         });
 
         if (!response.ok) {
@@ -572,6 +574,16 @@ export const useConversationWithStores = () => {
     conversationStore.clearMessages();
     conversationStore.updateSessionDuration();
     
+    // Start backend session (cookie-based anon identity)
+    apiClient.startSession({ personality: conversationStore.session.selectedPersonality, topic }).then((resp) => {
+      const sessionId = (resp as any)?.data?.session_id as number | undefined;
+      if (sessionId) {
+        conversationStore.setBackendSessionId(sessionId);
+      }
+    }).catch(() => {
+      // ignore; frontend will still function with fallback
+    });
+
     // Start session via WebSocket if available
     const sent = webSocket.startConversationSession(skipWelcome);
     

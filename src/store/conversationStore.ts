@@ -51,6 +51,7 @@ export interface SessionData {
   selectedPersonality: Personality;
   onboardingStep: OnboardingStep;
   conversationId?: string;
+  backendSessionId?: number | null;
   sessionDuration: number;
   sessionStartTime: number;
 }
@@ -148,6 +149,7 @@ export interface ConversationStore {
   completeOnboarding: () => void;
   updateSessionDuration: () => void;
   setConversationId: (id: string) => void;
+  setBackendSessionId: (id: number | null) => void;
   
   // UI actions
   setShowSettings: (show: boolean) => void;
@@ -207,6 +209,7 @@ export const useConversationStore = create<ConversationStore>()(
           userName: '',
           selectedPersonality: 'friendly',
           onboardingStep: 'welcome',
+          backendSessionId: null,
           sessionDuration: 0,
           sessionStartTime: 0,
         },
@@ -477,6 +480,13 @@ export const useConversationStore = create<ConversationStore>()(
         setConversationId: (id: string) => {
           set((state) => {
             state.session.conversationId = id;
+          });
+        },
+        
+        // Backend session id setter
+        setBackendSessionId: (id: number | null) => {
+          set((state) => {
+            state.session.backendSessionId = id;
           });
         },
         
