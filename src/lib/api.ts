@@ -1,6 +1,6 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
@@ -59,7 +59,13 @@ class ApiClient {
   }
 
   // Conversation endpoints
-  async sendConversationMessage(message: string, topic?: string, personality?: string, sessionId?: number, lastAiReply?: string) {
+  async sendConversationMessage(
+    message: string,
+    topic?: string,
+    personality?: string,
+    sessionId?: number,
+    lastAiReply?: string
+  ): Promise<ApiResponse<{ response: string; feedback?: unknown }>> {
     try {
       const response = await fetch(`${this.baseUrl}/api/conversation`, {
         method: 'POST',
@@ -73,7 +79,7 @@ class ApiClient {
       }
 
       const data = await response.json();
-      return { data };
+      return { data } as ApiResponse<{ response: string; feedback?: unknown }>;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown error occurred',
@@ -86,8 +92,8 @@ class ApiClient {
   }
 
   // Sessions (minimal loop)
-  async startSession(params: { personality?: string; topic?: string } = {}) {
-    return this.request('/api/sessions/start', {
+  async startSession(params: { personality?: string; topic?: string } = {}): Promise<ApiResponse<{ session_id: number }>> {
+    return this.request<{ session_id: number }>('/api/sessions/start', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

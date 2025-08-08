@@ -24,10 +24,10 @@ export default function PracticePage() {
     // Start session on load
     (async () => {
       const resp = await apiClient.startSession({ personality });
-      const sid = (resp as any)?.data?.session_id as number | undefined;
+      const sid = resp.data?.session_id;
       if (sid) setSessionId(sid);
     })();
-  }, []);
+  }, [personality]);
 
   const stopSilenceTimer = () => {
     if (silenceTimerRef.current) {
@@ -61,7 +61,7 @@ export default function PracticePage() {
           stopSilenceTimer();
         }
       });
-    } catch (e) {
+    } catch {
       setError('Failed to start listening');
       setListening(false);
     }
@@ -85,7 +85,7 @@ export default function PracticePage() {
     setStatus('Thinking...');
     try {
       const resp = await apiClient.sendConversationMessage(text, undefined, personality, sessionId ?? undefined, lastAIRef.current || undefined);
-      const reply = (resp as any)?.data?.response as string | undefined;
+      const reply = resp.data?.response;
       if (reply) {
         lastAIRef.current = reply;
         await speak(reply);
@@ -94,7 +94,7 @@ export default function PracticePage() {
       } else {
         setStatus('No response');
       }
-    } catch (e) {
+    } catch {
       setError('Failed to fetch response');
       setStatus('Error');
     }
@@ -109,7 +109,7 @@ export default function PracticePage() {
     }
     if (!sessionId) {
       const resp = await apiClient.startSession({ personality });
-      const sid = (resp as any)?.data?.session_id as number | undefined;
+      const sid = resp.data?.session_id;
       if (sid) setSessionId(sid);
     }
     await startListening();
@@ -119,7 +119,7 @@ export default function PracticePage() {
     setPersonality(p);
     // Optionally start a fresh session
     const resp = await apiClient.startSession({ personality: p });
-    const sid = (resp as any)?.data?.session_id as number | undefined;
+    const sid = resp.data?.session_id;
     if (sid) setSessionId(sid);
   };
 

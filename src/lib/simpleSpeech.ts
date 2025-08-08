@@ -5,8 +5,8 @@ type AnySpeechRecognition = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
-  onresult: ((event: any) => void) | null;
-  onerror: ((event: any) => void) | null;
+  onresult: ((event: unknown) => void) | null;
+  onerror: ((event: unknown) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
@@ -18,9 +18,13 @@ export class SimpleSpeech {
   private preferredVoice?: SpeechSynthesisVoice;
 
   constructor() {
-    const SpeechRecognitionImpl: any =
-      (typeof window !== 'undefined' && (window as any).SpeechRecognition) ||
-      (typeof window !== 'undefined' && (window as any).webkitSpeechRecognition);
+    type SpeechWindow = {
+      SpeechRecognition?: new () => AnySpeechRecognition;
+      webkitSpeechRecognition?: new () => AnySpeechRecognition;
+    };
+    const SpeechRecognitionImpl =
+      (typeof window !== 'undefined' && (window as unknown as SpeechWindow).SpeechRecognition) ||
+      (typeof window !== 'undefined' && (window as unknown as SpeechWindow).webkitSpeechRecognition);
     if (SpeechRecognitionImpl) {
       const rec: AnySpeechRecognition = new SpeechRecognitionImpl();
       rec.continuous = false;
@@ -75,16 +79,17 @@ export class SimpleSpeech {
     return new Promise((resolve, reject) => {
       if (!this.recognition) return reject(new Error('Speech recognition unavailable'));
 
-      this.recognition.onresult = (event: any) => {
+      this.recognition.onresult = (event: unknown) => {
+        const evt = event as { resultIndex: number; results: Array<{ 0: { transcript: string }; isFinal: boolean }> };
         let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-          const isFinal = event.results[i].isFinal;
+        for (let i = evt.resultIndex; i < evt.results.length; i++) {
+          transcript += evt.results[i][0].transcript;
+          const isFinal = evt.results[i].isFinal;
           onResult({ transcript, isFinal });
         }
       };
 
-      this.recognition.onerror = (e: any) => {
+      this.recognition.onerror = (e: unknown) => {
         reject(e);
       };
 
@@ -100,7 +105,7 @@ export class SimpleSpeech {
           this.recognition.stop();
           this.recognition.start();
         } catch (err) {
-          reject(err);
+          reject(err as unknown);
         }
       }
     });

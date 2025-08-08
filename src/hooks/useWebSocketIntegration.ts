@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useCallback, useRef } from 'react';
-import { useConversationStore, ConversationState } from '@/store/conversationStore';
-import { useSpeechStore } from '@/store/speechStore';
+import { useConversationStore, ConversationState, type ConversationFeedback } from '@/store/conversationStore';
 import { useUIStore } from '@/store/uiStore';
 import { useSpeechCoordinator } from '@/hooks/useSpeechCoordinator';
 import { apiClient } from '@/lib/api';
@@ -37,7 +36,6 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
 
   // Store references
   const conversationStore = useConversationStore();
-  const speechStore = useSpeechStore();
   const uiStore = useUIStore();
   
   // Speech coordinator for mutex protection
@@ -54,7 +52,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
   const isConnectingRef = useRef(false);
 
   // Message handlers
-  const handleConversationResponse = useCallback((data: { response: string; feedback?: any; conversationId?: string }) => {
+  const handleConversationResponse = useCallback((data: { response: string; feedback?: unknown; conversationId?: string }) => {
     const { response, feedback, conversationId } = data;
     
     // Add AI message to store
@@ -63,7 +61,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
       role: 'assistant',
       content: response,
       timestamp: new Date(),
-      feedback: feedback as any,
+      feedback: feedback as unknown as ConversationFeedback | undefined,
     });
 
     // Update conversation ID if provided
@@ -180,7 +178,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
       
       switch (message.type) {
         case 'conversation_response':
-          handleConversationResponse(message.data as { response: string; feedback?: any; conversationId?: string });
+          handleConversationResponse(message.data as { response: string; feedback?: unknown; conversationId?: string });
           break;
         case 'conversation_started':
           handleConversationStarted(message.data as { conversationId: string; welcomeMessage?: string });
@@ -232,8 +230,12 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
       });
       
       // Try to reconnect
+      // Avoid referring to connect before declaration; schedule reconnect via flag
       if (autoReconnect) {
-        connect();
+        // Simple delayed attempt leveraging onclose logic which already reconnects
+        if (wsRef.current) {
+          try { wsRef.current.close(); } catch {}
+        }
       }
       
       return false;
@@ -407,7 +409,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
     return () => {
       disconnect();
     };
-  }, []); // Empty dependency array to prevent reconnection loops
+  }, [connect, disconnect]);
 
   // Return hook interface
   return {
@@ -439,7 +441,6 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
 // Enhanced version of useConversation that uses the stores and WebSocket
 export const useConversationWithStores = () => {
   const conversationStore = useConversationStore();
-  const speechStore = useSpeechStore();
   const webSocket = useWebSocketIntegration();
   
   // Use the same speech coordinator instance from WebSocket hook
@@ -576,7 +577,7 @@ export const useConversationWithStores = () => {
     
     // Start backend session (cookie-based anon identity)
     apiClient.startSession({ personality: conversationStore.session.selectedPersonality, topic }).then((resp) => {
-      const sessionId = (resp as any)?.data?.session_id as number | undefined;
+      const sessionId = resp.data?.session_id;
       if (sessionId) {
         conversationStore.setBackendSessionId(sessionId);
       }

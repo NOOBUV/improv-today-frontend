@@ -1,0 +1,114 @@
+'use client';
+
+import { useCallback, useRef } from 'react';
+import { useSpeechStore } from '@/store/speechStore';
+
+type SpeakPriority = 'low' | 'normal' | 'high';
+
+interface SpeakCallbacks {
+  onStart?: () => void;
+  onEnd?: () => void;
+  onError?: (error: unknown) => void;
+}
+
+interface UseSpeechCoordinatorOptions {
+  autoInitialize?: boolean;
+}
+
+export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) => {
+  const { autoInitialize = false } = options;
+  const speechStore = useSpeechStore();
+  const queueRef = useRef<Array<{
+    text: string;
+    callbacks?: SpeakCallbacks;
+    priority: SpeakPriority;
+  }>>([]);
+  const isSpeakingRef = useRef(false);
+
+  const ensureInitialized = useCallback(() => {
+    if (!speechStore.isInitialized) {
+      speechStore.setInitialized(true);
+    }
+  }, [speechStore]);
+
+  const speakNow = useCallback((text: string, callbacks?: SpeakCallbacks) => {
+    try {
+      const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+      if (!synth) {
+        callbacks?.onError?.('Speech synthesis not available');
+        isSpeakingRef.current = false;
+        speechStore.setSpeaking(false);
+        callbacks?.onEnd?.();
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      callbacks?.onStart?.();
+      utterance.onend = () => {
+        isSpeakingRef.current = false;
+        speechStore.setSpeaking(false);
+        callbacks?.onEnd?.();
+        // process next
+        processQueue();
+      };
+      utterance.onerror = (e) => {
+        isSpeakingRef.current = false;
+        speechStore.setSpeaking(false);
+        callbacks?.onError?.(e);
+        processQueue();
+      };
+      // Cancel first for Chrome reliability
+      synth.cancel();
+      setTimeout(() => synth.speak(utterance), 50);
+    } catch (e) {
+      isSpeakingRef.current = false;
+      speechStore.setSpeaking(false);
+      callbacks?.onError?.(e);
+      processQueue();
+    }
+  }, [speechStore]);
+
+  const processQueue = useCallback(() => {
+    if (isSpeakingRef.current) return;
+    const next = queueRef.current.shift();
+    if (!next) return;
+    isSpeakingRef.current = true;
+    speechStore.setSpeaking(true);
+    speakNow(next.text, next.callbacks);
+  }, [speakNow, speechStore]);
+
+  const speak = useCallback(async (
+    text: string,
+    _voice?: SpeechSynthesisVoice,
+    callbacks?: SpeakCallbacks,
+    priority: SpeakPriority = 'normal'
+  ) => {
+    ensureInitialized();
+    // High priority goes to front of queue
+    if (priority === 'high') {
+      queueRef.current.unshift({ text, callbacks, priority });
+    } else {
+      queueRef.current.push({ text, callbacks, priority });
+    }
+    processQueue();
+  }, [ensureInitialized, processQueue]);
+
+  const stop = useCallback(() => {
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+    if (!synth) return;
+    synth.cancel();
+    isSpeakingRef.current = false;
+    speechStore.setSpeaking(false);
+    queueRef.current = [];
+  }, [speechStore]);
+
+  if (autoInitialize) {
+    ensureInitialized();
+  }
+
+  return {
+    speak,
+    stop,
+  };
+};
+
+

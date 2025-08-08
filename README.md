@@ -31,6 +31,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Prep this app for production on Vercel:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Set environment variables in Project Settings → Environment Variables
+   - `NEXT_PUBLIC_API_URL` (e.g., https://api.example.com)
+   - `NEXT_PUBLIC_WS_URL` (e.g., wss://api.example.com/api/ws)
+2. Framework preset: Next.js
+3. Build command: `next build`
+4. Output: Next.js (App Router)
+5. Optional: add a production `DISABLE_CSP=false` in Vercel envs (CSP should not be disabled in prod).
+
+Local production test:
+
+- `npm ci`
+- `npm run build`
+- `npm start`
