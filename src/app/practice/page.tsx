@@ -61,8 +61,9 @@ export default function PracticePage() {
           stopSilenceTimer();
         }
       });
-    } catch {
-      setError('Failed to start listening');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to start listening';
+      setError(message);
       setListening(false);
     }
   };

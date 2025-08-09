@@ -2,8 +2,8 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { useConversationStore, ConversationState, type ConversationFeedback } from '@/store/conversationStore';
-import { useUIStore } from '@/store/uiStore';
-import { useSpeechCoordinator } from '@/hooks/useSpeechCoordinator';
+import { useUIStore } from '../store/uiStore';
+import { useSpeechCoordinator } from './useSpeechCoordinator';
 import { apiClient } from '@/lib/api';
 
 // ===== TYPES =====
@@ -27,7 +27,9 @@ interface WebSocketConfig {
 
 export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
   const {
-    url = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/api/ws',
+    url = (typeof window !== 'undefined'
+      ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/ws`
+      : process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3000/api/ws'),
     reconnectAttempts = 5,
     reconnectDelay = 3000,
     heartbeatInterval = 30000,
@@ -86,7 +88,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
           conversationStore.autoStartListening();
         }, 500);
       },
-      onError: (error) => {
+      onError: (error: unknown) => {
         console.error('Speech synthesis error:', error);
         uiStore.addNotification({
           type: 'error',
@@ -99,7 +101,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
           conversationStore.autoStartListening();
         }, 500);
       },
-    }, 'normal').catch((error) => {
+    }, 'normal').catch((error: unknown) => {
       console.error('Failed to queue AI speech:', error);
       // Fallback to direct auto-start listening
       setTimeout(() => {
@@ -360,7 +362,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
         }
       };
 
-      wsRef.current.onerror = (error) => {
+      wsRef.current.onerror = (error: Event) => {
         console.error('WebSocket error:', error);
         isConnectingRef.current = false;
         
@@ -371,7 +373,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
           duration: 3000,
         });
       };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to create WebSocket connection:', error);
       isConnectingRef.current = false;
       
@@ -476,7 +478,7 @@ export const useConversationWithStores = () => {
           personality: personality || conversationStore.session.selectedPersonality,
         };
 
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/conversation`, {
+        const response = await fetch(`/api/conversation`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -516,7 +518,7 @@ export const useConversationWithStores = () => {
           onError: (error) => {
             console.error('Speech synthesis error (HTTP fallback):', error);
           },
-        }, 'normal').catch((error) => {
+        }, 'normal').catch((error: unknown) => {
           console.error('Failed to queue AI speech (HTTP fallback):', error);
         });
 
@@ -564,7 +566,7 @@ export const useConversationWithStores = () => {
           onError: (error) => {
             console.error('Speech synthesis error (fallback):', error);
           },
-        }, 'normal').catch((error) => {
+          }, 'normal').catch((error: unknown) => {
           console.error('Failed to queue AI speech (fallback):', error);
         });
       }

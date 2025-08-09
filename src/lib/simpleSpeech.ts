@@ -16,6 +16,7 @@ export class SimpleSpeech {
   private recognition?: AnySpeechRecognition;
   private isSpeaking = false;
   private preferredVoice?: SpeechSynthesisVoice;
+  
 
   constructor() {
     type SpeechWindow = {
@@ -41,6 +42,16 @@ export class SimpleSpeech {
       const setDefaultVoice = () => {
         const voices = window.speechSynthesis.getVoices() || [];
         this.preferredVoice = this.pickDefaultUkFemaleVoice(voices);
+        if (!this.preferredVoice && voices.length > 0) {
+          // Robust fallback order if Google UK Female isn't present
+          this.preferredVoice =
+            voices.find(v => v.name === 'Samantha') ||
+            voices.find(v => v.name === 'Alex') ||
+            voices.find(v => /^en-GB/i.test(v.lang || '')) ||
+            voices.find(v => /^en-/i.test(v.lang || '')) ||
+            voices.find(v => v.default) ||
+            voices[0];
+        }
       };
       setDefaultVoice();
       window.speechSynthesis.onvoiceschanged = () => setDefaultVoice();
@@ -76,6 +87,15 @@ export class SimpleSpeech {
   public async startListening(onResult: SpeechListener): Promise<void> {
     if (!this.recognition || this.isSpeaking) return;
 
+    // Ensure microphone permission (Brave and some Chromium derivatives require this)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop tracks immediately; we just needed permission
+      stream.getTracks().forEach((t) => t.stop());
+    } catch (e) {
+      throw new Error('Microphone access denied or unavailable. Please allow mic permission.');
+    }
+
     return new Promise((resolve, reject) => {
       if (!this.recognition) return reject(new Error('Speech recognition unavailable'));
 
@@ -90,7 +110,21 @@ export class SimpleSpeech {
       };
 
       this.recognition.onerror = (e: unknown) => {
-        reject(e);
+        const err = e as { error?: string };
+        if (err?.error === 'no-speech') {
+          // Non-fatal; resolve to allow caller to continue UI loop
+          return resolve();
+        }
+        if (err?.error === 'network') {
+          return reject(new Error('Speech recognition network error.'));
+        }
+        if (err?.error === 'not-allowed') {
+          return reject(new Error('Microphone permission blocked. Please allow mic access in browser settings.'));
+        }
+        if (err?.error === 'audio-capture') {
+          return reject(new Error('No microphone detected.'));
+        }
+        return reject(e);
       };
 
       this.recognition.onend = () => {

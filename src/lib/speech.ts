@@ -418,7 +418,7 @@ export class BrowserSpeechService {
 
       // Request body prepared
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/conversation`, {
+      const response = await fetch(`/api/conversation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

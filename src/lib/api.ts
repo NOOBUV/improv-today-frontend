@@ -1,4 +1,5 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use same-origin by default; Next rewrites proxy to backend
+const API_BASE_URL = '';
 
 export interface ApiResponse<T> {
   data?: T;
@@ -67,7 +68,7 @@ class ApiClient {
     lastAiReply?: string
   ): Promise<ApiResponse<{ response: string; feedback?: unknown }>> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/conversation`, {
+      const response = await fetch(`/api/conversation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

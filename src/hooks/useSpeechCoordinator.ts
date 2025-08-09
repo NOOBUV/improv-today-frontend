@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useSpeechStore } from '@/store/speechStore';
 
 type SpeakPriority = 'low' | 'normal' | 'high';
@@ -24,6 +24,30 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
     priority: SpeakPriority;
   }>>([]);
   const isSpeakingRef = useRef(false);
+  const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
+  const selectFallbackVoice = useCallback((): SpeechSynthesisVoice | null => {
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+    if (!synth) return null;
+    const voices = synth.getVoices();
+    if (!voices || voices.length === 0) return null;
+    const byName = (name: string) => voices.find(v => v.name === name) || null;
+    const contains = (substr: string) => voices.find(v => v.name.toLowerCase().includes(substr)) || null;
+    const byLang = (langPrefix: string) => voices.find(v => (v.lang || '').toLowerCase().startsWith(langPrefix)) || null;
+    return (
+      byName('Google UK English Female') ||
+      contains('google uk') ||
+      (byLang('en-gb') && contains('google')) ||
+      byName('Samantha') ||
+      byName('Alex') ||
+      byName('Google US English') ||
+      byLang('en-gb') ||
+      byLang('en-us') ||
+      voices.find(v => v.default) ||
+      voices[0] ||
+      null
+    );
+  }, []);
 
   const ensureInitialized = useCallback(() => {
     if (!speechStore.isInitialized) {
@@ -42,6 +66,16 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
         return;
       }
       const utterance = new SpeechSynthesisUtterance(text);
+      // Choose a robust fallback voice if available
+      if (!selectedVoiceRef.current) {
+        selectedVoiceRef.current = selectFallbackVoice();
+      }
+      if (selectedVoiceRef.current) {
+        utterance.voice = selectedVoiceRef.current;
+        if ((selectedVoiceRef.current.lang || '').toLowerCase().startsWith('en-gb')) {
+          utterance.lang = 'en-GB';
+        }
+      }
       callbacks?.onStart?.();
       utterance.onend = () => {
         isSpeakingRef.current = false;
@@ -65,7 +99,7 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
       callbacks?.onError?.(e);
       processQueue();
     }
-  }, [speechStore]);
+  }, [speechStore, selectFallbackVoice]);
 
   const processQueue = useCallback(() => {
     if (isSpeakingRef.current) return;
@@ -104,6 +138,23 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
   if (autoInitialize) {
     ensureInitialized();
   }
+
+  // Initialize voices promptly and react to changes
+  useEffect(() => {
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+    if (!synth) return;
+    const handler = () => {
+      if (!selectedVoiceRef.current) {
+        selectedVoiceRef.current = selectFallbackVoice();
+      }
+    };
+    // Attempt immediately and on voiceschanged
+    handler();
+    synth.addEventListener?.('voiceschanged', handler as EventListener);
+    return () => {
+      synth.removeEventListener?.('voiceschanged', handler as EventListener);
+    };
+  }, [selectFallbackVoice]);
 
   return {
     speak,
