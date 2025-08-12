@@ -45,18 +45,18 @@ class ApiClient {
 
   // Vocabulary endpoints
   async getWeeklyVocabulary() {
-    return this.request('/api/vocabulary/weekly');
+    return this.request('/api/backend/vocabulary/weekly');
   }
 
   async updateWordUsage(wordId: string, used: boolean) {
-    return this.request(`/api/vocabulary/${wordId}/usage`, {
+    return this.request(`/api/backend/vocabulary/${wordId}/usage`, {
       method: 'POST',
       body: JSON.stringify({ used, timestamp: new Date().toISOString() }),
     });
   }
 
   async getVocabularyStats() {
-    return this.request('/api/vocabulary/stats');
+    return this.request('/api/backend/vocabulary/stats');
   }
 
   // Conversation endpoints
@@ -68,10 +68,9 @@ class ApiClient {
     lastAiReply?: string
   ): Promise<ApiResponse<{ response: string; feedback?: unknown }>> {
     try {
-      const response = await fetch(`/api/conversation`, {
+      const response = await fetch(`/api/backend/conversation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ message, topic, personality, session_id: sessionId, last_ai_reply: lastAiReply }),
       });
 
@@ -89,14 +88,13 @@ class ApiClient {
   }
 
   async getConversationHistory(limit = 10) {
-    return this.request(`/api/conversation/history?limit=${limit}`);
+    return this.request(`/api/backend/conversation/history?limit=${limit}`);
   }
 
   // Sessions (minimal loop)
   async startSession(params: { personality?: string; topic?: string } = {}): Promise<ApiResponse<{ session_id: number }>> {
-    return this.request<{ session_id: number }>('/api/sessions/start', {
+    return this.request<{ session_id: number }>('/api/backend/sessions/start', {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_type: 'practice',
@@ -107,9 +105,8 @@ class ApiClient {
   }
 
   async endSession(sessionId: number) {
-    return this.request('/api/sessions/end', {
+    return this.request('/api/backend/sessions/end', {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId }),
     });
@@ -119,7 +116,7 @@ class ApiClient {
 
   // Progress tracking endpoints
   async getProgressData(timeframe: 'week' | 'month' | 'year' = 'week') {
-    return this.request(`/api/progress?timeframe=${timeframe}`);
+    return this.request(`/api/backend/progress?timeframe=${timeframe}`);
   }
 
   async saveSessionData(sessionData: {
@@ -129,7 +126,7 @@ class ApiClient {
     vocabularyUsed: string[];
     averageRating: number;
   }) {
-    return this.request('/api/progress/session', {
+    return this.request('/api/backend/progress/session', {
       method: 'POST',
       body: JSON.stringify(sessionData),
     });
@@ -137,7 +134,7 @@ class ApiClient {
 
   // User profile endpoints
   async getUserProfile() {
-    return this.request('/api/user/profile');
+    return this.request('/api/backend/user/profile');
   }
 
   async updateUserProfile(profileData: {
@@ -146,7 +143,7 @@ class ApiClient {
     goals?: string[];
     preferences?: Record<string, unknown>;
   }) {
-    return this.request('/api/user/profile', {
+    return this.request('/api/backend/user/profile', {
       method: 'PUT',
       body: JSON.stringify(profileData),
     });

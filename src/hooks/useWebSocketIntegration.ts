@@ -478,7 +478,7 @@ export const useConversationWithStores = () => {
           personality: personality || conversationStore.session.selectedPersonality,
         };
 
-        const response = await fetch(`/api/conversation`, {
+        const response = await fetch(`/api/backend/conversation`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

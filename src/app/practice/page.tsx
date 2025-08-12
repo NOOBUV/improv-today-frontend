@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { apiClient } from '@/lib/api';
 import { SimpleSpeech } from '@/lib/simpleSpeech';
 import { Button } from '@/components/ui/button';
+import { Auth } from '@/components/Auth';
 
 type Personality = 'friendly' | 'sassy' | 'blunt';
 
@@ -118,15 +120,23 @@ export default function PracticePage() {
 
   const onPersonality = async (p: Personality) => {
     setPersonality(p);
-    // Optionally start a fresh session
-    const resp = await apiClient.startSession({ personality: p });
-    const sid = resp.data?.session_id;
-    if (sid) setSessionId(sid);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-6">
-      <h1 className="text-4xl font-bold text-white mb-2">Improv.Today</h1>
+      <div className="absolute top-4 right-4">
+        <Auth />
+      </div>
+      <div className="mb-4">
+        <Image
+          src="/improv-today-logo.png"
+          alt="Improv.Today"
+          width={200}
+          height={80}
+          className="h-20 w-auto"
+          priority
+        />
+      </div>
       <p className="text-white/70 mb-8">Tap → listen → silence → AI speaks → listen</p>
 
       <div className="flex gap-2 mb-6">
