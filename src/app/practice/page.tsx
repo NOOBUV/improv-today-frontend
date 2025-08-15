@@ -3,123 +3,112 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { apiClient } from '@/lib/api';
-import { SimpleSpeech } from '@/lib/simpleSpeech';
-import { Button } from '@/components/ui/button';
+import { useConversationStore } from '@/store/conversationStore';
 import { Auth } from '@/components/Auth';
-
-type Personality = 'friendly' | 'sassy' | 'blunt';
+import { SpeechInterface } from '@/components/SpeechInterface';
+import { PersonalitySelector } from '@/components/PersonalitySelector';
+import { ConversationStatus } from '@/components/ConversationStatus';
 
 export default function PracticePage() {
-  const [sessionId, setSessionId] = useState<number | null>(null);
-  const [personality, setPersonality] = useState<Personality>('friendly');
-  const [status, setStatus] = useState<string>('Tap to start');
-  const [listening, setListening] = useState<boolean>(false);
-  const [transcript, setTranscript] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
-  const [aiSpeaking, setAISpeaking] = useState<boolean>(false);
   const lastAIRef = useRef<string>('');
-  const speechRef = useRef<SimpleSpeech | null>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [aiResponse, setAIResponse] = useState<string>('');
+  
+  const {
+    session,
+    isProcessing,
+    addMessage,
+    setProcessing,
+    setError,
+    setBackendSessionId,
+  } = useConversationStore();
 
+  // Initialize session on load
   useEffect(() => {
-    speechRef.current = new SimpleSpeech();
-    // Start session on load
-    (async () => {
-      const resp = await apiClient.startSession({ personality });
-      const sid = resp.data?.session_id;
-      if (sid) setSessionId(sid);
-    })();
-  }, [personality]);
+    const initSession = async () => {
+      try {
+        const resp = await apiClient.startSession({ 
+          personality: session.selectedPersonality 
+        });
+        const sid = resp.data?.session_id;
+        if (sid) setBackendSessionId(sid);
+      } catch (error) {
+        // Ignore error - app will work with fallback mode
+      }
+    };
+    
+    initSession();
+  }, [session.selectedPersonality, setBackendSessionId]);
 
-  const stopSilenceTimer = () => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-  };
-
-  const startListening = async () => {
+  const handleTranscriptComplete = async (transcript: string) => {
+    if (!transcript.trim()) return;
+    
+    // Add user message
+    const userMessage = {
+      id: `msg-${Date.now()}-user`,
+      role: 'user' as const,
+      content: transcript,
+      timestamp: new Date(),
+    };
+    addMessage(userMessage);
+    
+    setProcessing(true);
     setError(null);
-    const speech = speechRef.current;
-    if (!speech?.canListen()) {
-      setError('Speech recognition not supported. Use Chrome/Edge.');
-      return;
-    }
-    setListening(true);
-    setStatus('Listening...');
-    setTranscript('');
+    
     try {
-      await speech.startListening(({ transcript: t, isFinal }) => {
-        if (isFinal) {
-          const finalText = t.trim();
-          setTranscript(finalText);
-          stopSilenceTimer();
-          silenceTimerRef.current = setTimeout(() => {
-            void handleFinalTranscript(finalText);
-          }, 1200);
-                  } else {
-          // Show only the latest interim chunk to avoid duplication
-          setTranscript(t);
-          stopSilenceTimer();
-        }
-      });
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to start listening';
-      setError(message);
-      setListening(false);
-    }
-  };
+      const response = await apiClient.sendConversationMessage(
+        transcript,
+        undefined, // topic
+        session.selectedPersonality,
+        session.backendSessionId ?? undefined,
+        lastAIRef.current || undefined
+      );
 
-  const stopListening = async () => {
-    stopSilenceTimer();
-    setListening(false);
-    await speechRef.current?.stopListening();
-  };
-
-  const speak = async (text: string) => {
-    setAISpeaking(true);
-    setStatus('AI speaking...');
-    await speechRef.current?.speak(text);
-    setAISpeaking(false);
-  };
-
-  const handleFinalTranscript = async (text: string) => {
-    await stopListening();
-    setStatus('Thinking...');
-    try {
-      const resp = await apiClient.sendConversationMessage(text, undefined, personality, sessionId ?? undefined, lastAIRef.current || undefined);
-      const reply = resp.data?.response;
+      const reply = response.data?.response;
       if (reply) {
         lastAIRef.current = reply;
-        await speak(reply);
-        setStatus('Listening...');
-        await startListening();
+        
+        // Add AI message
+        const aiMessage = {
+          id: `msg-${Date.now()}-assistant`,
+          role: 'assistant' as const,
+          content: reply,
+          timestamp: new Date(),
+          feedback: response.data?.feedback as any,
+        };
+        addMessage(aiMessage);
+        
+        // Trigger AI response (will auto-start listening after speaking)
+        setAIResponse(reply);
       } else {
-        setStatus('No response');
+        setError('No response received');
       }
-    } catch {
-      setError('Failed to fetch response');
-      setStatus('Error');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get response';
+      setError(errorMessage);
+      
+      // Fallback response
+      const fallbackResponses = {
+        sassy: `Oh, "${transcript}"? How utterly fascinating, darling! Do tell me more - I'm positively riveted!`,
+        blunt: `"${transcript}" - okay, got it. What's your point exactly?`,
+        friendly: `That's really interesting about "${transcript}"! I'd love to hear more about your experience with that.`,
+      };
+      
+      const fallbackResponse = fallbackResponses[session.selectedPersonality] || fallbackResponses.friendly;
+      lastAIRef.current = fallbackResponse;
+      
+      const fallbackMessage = {
+        id: `msg-${Date.now()}-assistant`,
+        role: 'assistant' as const,
+        content: fallbackResponse,
+        timestamp: new Date(),
+      };
+      addMessage(fallbackMessage);
+      
+      // Trigger fallback response
+      setAIResponse(fallbackResponse);
+    } finally {
+      setProcessing(false);
     }
-  };
-
-  const toggle = async () => {
-    if (aiSpeaking) return;
-    if (listening) {
-      await stopListening();
-      setStatus('Paused');
-      return;
-    }
-    if (!sessionId) {
-      const resp = await apiClient.startSession({ personality });
-      const sid = resp.data?.session_id;
-      if (sid) setSessionId(sid);
-    }
-    await startListening();
-  };
-
-  const onPersonality = async (p: Personality) => {
-    setPersonality(p);
   };
 
   return (
@@ -127,7 +116,9 @@ export default function PracticePage() {
       <div className="absolute top-4 right-4">
         <Auth />
       </div>
-      <div className="mb-4">
+      
+      {/* Logo */}
+      <div className="mb-8">
         <Image
           src="/improv-today-logo.png"
           alt="Improv.Today"
@@ -137,27 +128,28 @@ export default function PracticePage() {
           priority
         />
       </div>
-      <p className="text-white/70 mb-8">Tap → listen → silence → AI speaks → listen</p>
-
-      <div className="flex gap-2 mb-6">
-        {(['friendly', 'sassy', 'blunt'] as Personality[]).map((p) => (
-          <Button key={p} onClick={() => onPersonality(p)} variant={p === personality ? 'default' : 'outline'}>
-            {p}
-            </Button>
-          ))}
+      
+      {/* Instructions */}
+      <p className="text-white/70 mb-8 text-center">
+        Tap → listen → silence → AI speaks → listen
+      </p>
+      
+      {/* Personality Selector */}
+      <div className="mb-8">
+        <PersonalitySelector disabled={isProcessing} />
       </div>
-
-      <Button onClick={toggle} className="w-48 h-48 rounded-full text-lg">
-        {aiSpeaking ? 'Speaking...' : listening ? 'Pause' : 'Tap to talk'}
-              </Button>
-
-      <div className="mt-6 text-center text-white/80 min-h-[3rem]">
-        <div className="mb-2">{status}</div>
-        {transcript && <div className="text-sm italic break-words max-w-md">“{transcript}”</div>}
-        {error && <div className="text-red-300 mt-2">{error}</div>}
-              </div>
-
-      <div className="mt-6 text-white/70 text-sm">Session: {sessionId ?? '—'}</div>
+      
+      {/* Main Speech Interface */}
+      <SpeechInterface 
+        onTranscriptComplete={handleTranscriptComplete}
+        disabled={isProcessing}
+        aiResponse={aiResponse}
+      />
+      
+      {/* Status */}
+      <div className="mt-8">
+        <ConversationStatus />
+      </div>
     </div>
   );
 }
