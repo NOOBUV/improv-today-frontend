@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/components/AuthProvider";
+import { AuthGuard } from "@/components/AuthGuard";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -14,16 +17,23 @@ export const metadata: Metadata = {
   description: "Practice English conversation with AI. Clean, minimal interface with personality selection.",
   keywords: "English learning, conversation practice, AI tutor, speaking skills",
   authors: [{ name: "ImprovToday Team" }],
+  icons: {
+    icon: "/improv-today-logo.png",
+    shortcut: "/improv-today-logo.png",
+    apple: "/improv-today-logo.png",
+  },
   openGraph: {
     title: "ImprovToday - AI Conversation Practice",
     description: "Practice English conversation with AI",
     type: "website",
     locale: "en_US",
+    images: ["/improv-today-logo.png"],
   },
   twitter: {
     card: "summary_large_image",
     title: "ImprovToday - AI Conversation Practice",
     description: "Practice English conversation with AI",
+    images: ["/improv-today-logo.png"],
   },
   robots: "index, follow",
 };
@@ -36,9 +46,15 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="font-sans antialiased">
-        <main className="min-h-screen">
-          {children}
-        </main>
+        <ErrorBoundary>
+          <AuthProvider>
+            <AuthGuard>
+              <main className="min-h-screen">
+                {children}
+              </main>
+            </AuthGuard>
+          </AuthProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

@@ -418,7 +418,7 @@ export class BrowserSpeechService {
 
       // Request body prepared
 
-      const response = await fetch(`/api/conversation`, {
+      const response = await fetch(`/api/backend/conversation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
