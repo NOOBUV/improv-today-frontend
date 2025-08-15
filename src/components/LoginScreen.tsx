@@ -45,7 +45,7 @@ export function LoginScreen() {
           <div className="text-center">
             <p className="text-xs text-gray-400 mt-4">
               Secure authentication powered by Auth0.<br/>
-              You'll be redirected to complete the login.
+              You&apos;ll be redirected to complete the login.
             </p>
           </div>
         </div>

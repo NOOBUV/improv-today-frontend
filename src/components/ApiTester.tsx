@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { Button } from './ui/button';
-import { apiClient } from '@/lib/api-client';
+import { apiClient } from '@/lib/api';
 
 export function ApiTester() {
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<Array<{type: string; success: boolean; data?: unknown; error?: string}>>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const addResult = (result: any) => {
+  const addResult = (result: {type: string; success: boolean; data?: unknown; error?: string}) => {
     setResults(prev => [result, ...prev]);
   };
 
@@ -23,9 +23,10 @@ export function ApiTester() {
       });
       addResult({ type: 'start', success: true, data: result });
       console.log('✅ /start test successful:', result);
-    } catch (error: any) {
-      console.error('❌ /start test failed:', error.message);
-      addResult({ type: 'start', success: false, error: error.message });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ /start test failed:', errorMessage);
+      addResult({ type: 'start', success: false, error: errorMessage });
     }
     setIsLoading(false);
   };
@@ -34,16 +35,17 @@ export function ApiTester() {
     setIsLoading(true);
     try {
       console.log('🧪 Testing /conversation endpoint...');
-      const result = await apiClient.sendMessage({
-        message: 'Hello, how are you today?',
-        personality: 'friendly',
-        session_type: 'practice'
-      });
+      const result = await apiClient.sendConversationMessage(
+        'Hello, how are you today?',
+        undefined, // topic
+        'friendly' // personality
+      );
       addResult({ type: 'conversation', success: true, data: result });
       console.log('✅ /conversation test successful:', result);
-    } catch (error: any) {
-      console.error('❌ /conversation test failed:', error.message);
-      addResult({ type: 'conversation', success: false, error: error.message });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ /conversation test failed:', errorMessage);
+      addResult({ type: 'conversation', success: false, error: errorMessage });
     }
     setIsLoading(false);
   };

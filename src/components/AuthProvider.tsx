@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
 interface User {
   name?: string;
@@ -52,7 +52,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           localStorage.setItem('auth_token', accessToken);
         }
       }
-    } catch (error) {
+    } catch {
       // Clear any stale session data
       setSessionUser(null);
       setToken(null);
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const fetchAccessToken = async () => {
+  const fetchAccessToken = useCallback(async () => {
     if (!sessionUser) return;
     
     try {
@@ -70,13 +70,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setToken(accessToken);
         localStorage.setItem('auth_token', accessToken);
       }
-    } catch (error) {
+    } catch {
       // Fallback to demo token for development
       const demoToken = 'demo-jwt-token';
       setToken(demoToken);
       localStorage.setItem('auth_token', demoToken);
     }
-  };
+  }, [sessionUser]);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -98,7 +98,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setToken(savedToken);
       }
     }
-  }, [sessionUser]);
+  }, [sessionUser, fetchAccessToken]);
 
   const refreshToken = async () => {
     await fetchAccessToken();

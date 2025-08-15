@@ -8,12 +8,14 @@ export async function GET(request: NextRequest) {
   switch (authAction) {
     case 'login':
       // Redirect to Auth0 login
-      const loginUrl = `https://${process.env.AUTH0_DOMAIN}/authorize?response_type=code&client_id=${process.env.AUTH0_CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.AUTH0_BASE_URL + '/api/auth/callback')}&scope=openid profile email`;
+      const baseUrlForLogin = process.env.AUTH0_BASE_URL || '';
+      const loginUrl = `https://${process.env.AUTH0_DOMAIN}/authorize?response_type=code&client_id=${process.env.AUTH0_CLIENT_ID}&redirect_uri=${encodeURIComponent(baseUrlForLogin + '/api/auth/callback')}&scope=openid profile email`;
       return NextResponse.redirect(loginUrl);
 
     case 'logout':
       // Handle logout
-      const logoutUrl = `https://${process.env.AUTH0_DOMAIN}/v2/logout?client_id=${process.env.AUTH0_CLIENT_ID}&returnTo=${encodeURIComponent(process.env.AUTH0_BASE_URL)}`;
+      const baseUrl = process.env.AUTH0_BASE_URL || '';
+      const logoutUrl = `https://${process.env.AUTH0_DOMAIN}/v2/logout?client_id=${process.env.AUTH0_CLIENT_ID}&returnTo=${encodeURIComponent(baseUrl)}`;
       
       const response = NextResponse.redirect(logoutUrl);
       
@@ -36,7 +38,6 @@ export async function GET(request: NextRequest) {
       try {
         const url = new URL(request.url);
         const code = url.searchParams.get('code');
-        const state = url.searchParams.get('state');
         
         if (!code) {
           return NextResponse.redirect(new URL('/?error=missing_code', request.url));
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
             client_id: process.env.AUTH0_CLIENT_ID,
             client_secret: process.env.AUTH0_CLIENT_SECRET,
             code: code,
-            redirect_uri: `${process.env.AUTH0_BASE_URL}/api/auth/callback`,
+            redirect_uri: `${process.env.AUTH0_BASE_URL || ''}/api/auth/callback`,
           }),
         });
 
@@ -110,7 +111,7 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'No session' }, { status: 401 });
         }
         return NextResponse.json(session.user);
-      } catch (error) {
+      } catch {
         return NextResponse.json({ error: 'Failed to get profile' }, { status: 500 });
       }
 

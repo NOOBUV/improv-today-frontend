@@ -32,7 +32,7 @@ export default function TestAuthPage() {
             <li>• Login screen blocks access until authenticated</li>
             <li>• Bearer tokens stored in localStorage (demo mode)</li>
             <li>• API calls include Authorization: Bearer &lt;token&gt; header</li>
-            <li>• No cookies sent with requests (credentials: 'omit')</li>
+            <li>• No cookies sent with requests (credentials: &apos;omit&apos;)</li>
             <li>• Backend validates Bearer tokens instead of sessions</li>
           </ul>
         </div>

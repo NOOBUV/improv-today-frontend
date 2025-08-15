@@ -1,7 +1,6 @@
-import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function middleware() {
   // Simple pass-through middleware - Auth0 session handling is done at the route level
   return NextResponse.next();
 }

@@ -47,7 +47,7 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
     );
   }, []);
 
-  const speakNow = useCallback((text: string, callbacks?: SpeakCallbacks) => {
+  const speakNow: (text: string, callbacks?: SpeakCallbacks) => void = useCallback((text: string, callbacks?: SpeakCallbacks) => {
     try {
       const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
       if (!synth) {
@@ -87,7 +87,7 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
       callbacks?.onError?.(e);
       processQueue();
     }
-  }, [selectFallbackVoice]);
+  }, [selectFallbackVoice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const processQueue = useCallback(() => {
     if (isSpeaking) return;
@@ -104,10 +104,14 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
     priority: SpeakPriority = 'normal'
   ) => {
     // High priority goes to front of queue
+    const queueItem = callbacks 
+      ? { text, callbacks, priority }
+      : { text, priority };
+    
     if (priority === 'high') {
-      queueRef.current.unshift({ text, callbacks, priority });
+      queueRef.current.unshift(queueItem);
     } else {
-      queueRef.current.push({ text, callbacks, priority });
+      queueRef.current.push(queueItem);
     }
     processQueue();
   }, [processQueue]);

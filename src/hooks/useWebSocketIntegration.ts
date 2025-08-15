@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useCallback, useRef } from 'react';
-import { useConversationStore, ConversationState, type ConversationFeedback } from '@/store/conversationStore';
+import { useConversationStore, type ConversationFeedback } from '@/store/conversationStore';
 import { useUIStore } from '../store/uiStore';
 import { useSpeechCoordinator } from './useSpeechCoordinator';
 import { apiClient } from '@/lib/api';
@@ -58,23 +58,26 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
     const { response, feedback, conversationId } = data;
     
     // Add AI message to store
-    conversationStore.addMessage({
+    const messageData: { id: string; role: 'assistant'; content: string; timestamp: Date; feedback?: ConversationFeedback } = {
       id: `msg-${Date.now()}-assistant`,
       role: 'assistant',
       content: response,
       timestamp: new Date(),
-      feedback: feedback as unknown as ConversationFeedback | undefined,
-    });
+    };
+    
+    if (feedback) {
+      messageData.feedback = feedback as ConversationFeedback;
+    }
+    
+    conversationStore.addMessage(messageData as never);
 
     // Update conversation ID if provided
     if (conversationId) {
       conversationStore.setConversationId(conversationId);
     }
 
-    // Transition to AI speaking state
-    if (conversationStore.canTransitionTo(ConversationState.AI_SPEAKING, 'AI_RESPONSE_READY')) {
-      conversationStore.transitionTo(ConversationState.AI_SPEAKING, 'AI_RESPONSE_READY');
-    }
+    // Set AI speaking state
+    conversationStore.setAISpeaking(true);
 
     // Trigger speech synthesis with mutex protection
     speechCoordinator.speak(response, undefined, {
@@ -85,7 +88,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
         console.log('AI finished speaking response');
         // Auto-start listening after AI finishes speaking
         setTimeout(() => {
-          conversationStore.autoStartListening();
+          conversationStore.setListening(true);
         }, 500);
       },
       onError: (error: unknown) => {
@@ -98,14 +101,14 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
         });
         // Still try to auto-start listening
         setTimeout(() => {
-          conversationStore.autoStartListening();
+          conversationStore.setListening(true);
         }, 500);
       },
     }, 'normal').catch((error: unknown) => {
       console.error('Failed to queue AI speech:', error);
       // Fallback to direct auto-start listening
       setTimeout(() => {
-        conversationStore.autoStartListening();
+        conversationStore.setListening(true);
       }, 500);
     });
   }, [conversationStore, speechCoordinator, uiStore]);
@@ -153,7 +156,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
     console.log('Session ended:', { reason, stats });
     
     // Reset conversation state
-    conversationStore.resetConversation();
+    conversationStore.reset();
     
     uiStore.addNotification({
       type: 'info',
@@ -275,8 +278,6 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
         personality: session.selectedPersonality,
         skipWelcome,
         userName: session.userName,
-        isFirstTime: session.isFirstTime,
-        onboardingStep: session.onboardingStep,
       },
     });
   }, [conversationStore, sendMessage]);
@@ -454,15 +455,18 @@ export const useConversationWithStores = () => {
     personality?: string
   ) => {
     // Add user message to store
-    const userMessage = {
+    const userMessage: { id: string; role: 'user'; content: string; timestamp: Date; audioUrl?: string } = {
       id: `msg-${Date.now()}-user`,
       role: 'user' as const,
       content,
       timestamp: new Date(),
-      audioUrl: audioBlob ? URL.createObjectURL(audioBlob) : undefined,
     };
+    
+    if (audioBlob) {
+      userMessage.audioUrl = URL.createObjectURL(audioBlob);
+    }
 
-    conversationStore.addMessage(userMessage);
+    conversationStore.addMessage(userMessage as never);
     conversationStore.setProcessing(true);
 
     // Send via WebSocket if available, otherwise use HTTP fallback
@@ -512,7 +516,7 @@ export const useConversationWithStores = () => {
           onEnd: () => {
             console.log('AI finished speaking (HTTP fallback)');
             setTimeout(() => {
-              conversationStore.autoStartListening();
+              conversationStore.setListening(true);
             }, 500);
           },
           onError: (error) => {
@@ -560,7 +564,7 @@ export const useConversationWithStores = () => {
           onEnd: () => {
             console.log('AI finished speaking (fallback)');
             setTimeout(() => {
-              conversationStore.autoStartListening();
+              conversationStore.setListening(true);
             }, 500);
           },
           onError: (error) => {
@@ -578,7 +582,11 @@ export const useConversationWithStores = () => {
     conversationStore.updateSessionDuration();
     
     // Start backend session (cookie-based anon identity)
-    apiClient.startSession({ personality: conversationStore.session.selectedPersonality, topic }).then((resp) => {
+    const sessionParams: { personality: string; topic?: string } = { personality: conversationStore.session.selectedPersonality };
+    if (topic) {
+      sessionParams.topic = topic;
+    }
+    apiClient.startSession(sessionParams).then((resp) => {
       const sessionId = resp.data?.session_id;
       if (sessionId) {
         conversationStore.setBackendSessionId(sessionId);
@@ -607,10 +615,10 @@ export const useConversationWithStores = () => {
 
   return {
     messages: conversationStore.messages,
-    isProcessing: conversationStore.ui.isProcessing,
+    isProcessing: conversationStore.isProcessing,
     sendMessage,
     startSession,
-    endSession: () => conversationStore.resetConversation(),
+    endSession: () => conversationStore.reset(),
     clearConversation: () => conversationStore.clearMessages(),
   };
 };

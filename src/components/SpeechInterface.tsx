@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, memo } from 'react';
+import { useEffect, useRef, useCallback, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { SimpleSpeech } from '@/lib/simpleSpeech';
 import { useConversationStore } from '@/store/conversationStore';
@@ -35,32 +35,27 @@ export const SpeechInterface = memo(function SpeechInterface({ onTranscriptCompl
     speechRef.current = new SimpleSpeech();
   }, []);
 
-  // Handle AI response - speak it and auto-restart listening
-  useEffect(() => {
-    if (aiResponse && !disabled) {
-      const speakAndRestart = async () => {
-        setAISpeaking(true);
-        await speechRef.current?.speak(aiResponse);
-        setAISpeaking(false);
-        
-        // Auto-start listening after AI finishes speaking
-        setTimeout(() => {
-          startListening();
-        }, config.aiSpeech.autoStartListeningDelay);
-      };
-      
-      speakAndRestart();
-    }
-  }, [aiResponse, disabled]);
-
-  const stopSilenceTimer = () => {
+  const stopSilenceTimer = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
     }
-  };
+  }, []);
 
-  const startListening = async () => {
+  const stopListening = useCallback(async () => {
+    stopSilenceTimer();
+    setListening(false);
+    await speechRef.current?.stopListening();
+  }, [stopSilenceTimer, setListening]);
+
+  const handleFinalTranscript = useCallback(async (text: string) => {
+    await stopListening();
+    if (text.trim()) {
+      onTranscriptComplete(text.trim());
+    }
+  }, [onTranscriptComplete, stopListening]);
+
+  const startListening = useCallback(async () => {
     setError(null);
     const speech = speechRef.current;
     if (!speech?.canListen()) {
@@ -90,20 +85,25 @@ export const SpeechInterface = memo(function SpeechInterface({ onTranscriptCompl
       setError(message);
       setListening(false);
     }
-  };
+  }, [clearTranscript, setListening, setError, setTranscript, stopSilenceTimer, handleFinalTranscript]);
 
-  const stopListening = async () => {
-    stopSilenceTimer();
-    setListening(false);
-    await speechRef.current?.stopListening();
-  };
-
-  const handleFinalTranscript = async (text: string) => {
-    await stopListening();
-    if (text.trim()) {
-      onTranscriptComplete(text.trim());
+  // Handle AI response - speak it and auto-restart listening
+  useEffect(() => {
+    if (aiResponse && !disabled) {
+      const speakAndRestart = async () => {
+        setAISpeaking(true);
+        await speechRef.current?.speak(aiResponse);
+        setAISpeaking(false);
+        
+        // Auto-start listening after AI finishes speaking
+        setTimeout(() => {
+          startListening();
+        }, config.aiSpeech.autoStartListeningDelay);
+      };
+      
+      speakAndRestart();
     }
-  };
+  }, [aiResponse, disabled, setAISpeaking, startListening]);
 
   const handleToggle = async () => {
     if (disabled || isAISpeaking) return;
@@ -147,7 +147,7 @@ export const SpeechInterface = memo(function SpeechInterface({ onTranscriptCompl
         <div className="mb-2">{getStatusText()}</div>
         {(transcript || interimTranscript) && (
           <div className="text-sm italic break-words max-w-md">
-            "{transcript || interimTranscript}"
+            &ldquo;{transcript || interimTranscript}&rdquo;
           </div>
         )}
         {error && <div className="text-red-300 mt-2">{error}</div>}

@@ -1,4 +1,3 @@
-import { Auth0Client } from '@auth0/nextjs-auth0/server';
 import { cookies } from 'next/headers';
 
 class CustomAuth0Client {

@@ -31,7 +31,7 @@ export default function PracticePage() {
         });
         const sid = resp.data?.session_id;
         if (sid) setBackendSessionId(sid);
-      } catch (error) {
+      } catch {
         // Ignore error - app will work with fallback mode
       }
     };
@@ -68,14 +68,18 @@ export default function PracticePage() {
         lastAIRef.current = reply;
         
         // Add AI message
-        const aiMessage = {
+        const aiMessage: Record<string, unknown> = {
           id: `msg-${Date.now()}-assistant`,
           role: 'assistant' as const,
           content: reply,
           timestamp: new Date(),
-          feedback: response.data?.feedback as any,
         };
-        addMessage(aiMessage);
+        
+        if (response.data?.feedback) {
+          aiMessage.feedback = response.data.feedback;
+        }
+        
+        addMessage(aiMessage as never);
         
         // Trigger AI response (will auto-start listening after speaking)
         setAIResponse(reply);

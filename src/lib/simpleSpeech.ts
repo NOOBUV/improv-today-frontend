@@ -41,7 +41,10 @@ export class SimpleSpeech {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       const setDefaultVoice = () => {
         const voices = window.speechSynthesis.getVoices() || [];
-        this.preferredVoice = this.pickDefaultUkFemaleVoice(voices);
+        const defaultVoice = this.pickDefaultUkFemaleVoice(voices);
+        if (defaultVoice) {
+          this.preferredVoice = defaultVoice;
+        }
         if (!this.preferredVoice && voices.length > 0) {
           // Robust fallback order if Google UK Female isn't present
           this.preferredVoice =
@@ -92,7 +95,7 @@ export class SimpleSpeech {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       // Stop tracks immediately; we just needed permission
       stream.getTracks().forEach((t) => t.stop());
-    } catch (e) {
+    } catch {
       throw new Error('Microphone access denied or unavailable. Please allow mic permission.');
     }
 
@@ -133,7 +136,7 @@ export class SimpleSpeech {
 
       try {
         this.recognition.start();
-      } catch (e) {
+      } catch {
         // Some browsers throw if already started. Stop and retry once.
         try {
           this.recognition.stop();
