@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
-import { useSpeechStore } from '@/store/speechStore';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type SpeakPriority = 'low' | 'normal' | 'high';
 
@@ -17,13 +16,12 @@ interface UseSpeechCoordinatorOptions {
 
 export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) => {
   const { autoInitialize = false } = options;
-  const speechStore = useSpeechStore();
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const queueRef = useRef<Array<{
     text: string;
     callbacks?: SpeakCallbacks;
     priority: SpeakPriority;
   }>>([]);
-  const isSpeakingRef = useRef(false);
   const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
   const selectFallbackVoice = useCallback((): SpeechSynthesisVoice | null => {
@@ -49,19 +47,12 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
     );
   }, []);
 
-  const ensureInitialized = useCallback(() => {
-    if (!speechStore.isInitialized) {
-      speechStore.setInitialized(true);
-    }
-  }, [speechStore]);
-
   const speakNow = useCallback((text: string, callbacks?: SpeakCallbacks) => {
     try {
       const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
       if (!synth) {
         callbacks?.onError?.('Speech synthesis not available');
-        isSpeakingRef.current = false;
-        speechStore.setSpeaking(false);
+        setIsSpeaking(false);
         callbacks?.onEnd?.();
         return;
       }
@@ -78,15 +69,13 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
       }
       callbacks?.onStart?.();
       utterance.onend = () => {
-        isSpeakingRef.current = false;
-        speechStore.setSpeaking(false);
+        setIsSpeaking(false);
         callbacks?.onEnd?.();
         // process next
         processQueue();
       };
       utterance.onerror = (e) => {
-        isSpeakingRef.current = false;
-        speechStore.setSpeaking(false);
+        setIsSpeaking(false);
         callbacks?.onError?.(e);
         processQueue();
       };
@@ -94,21 +83,19 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
       synth.cancel();
       setTimeout(() => synth.speak(utterance), 50);
     } catch (e) {
-      isSpeakingRef.current = false;
-      speechStore.setSpeaking(false);
+      setIsSpeaking(false);
       callbacks?.onError?.(e);
       processQueue();
     }
-  }, [speechStore, selectFallbackVoice]);
+  }, [selectFallbackVoice]);
 
   const processQueue = useCallback(() => {
-    if (isSpeakingRef.current) return;
+    if (isSpeaking) return;
     const next = queueRef.current.shift();
     if (!next) return;
-    isSpeakingRef.current = true;
-    speechStore.setSpeaking(true);
+    setIsSpeaking(true);
     speakNow(next.text, next.callbacks);
-  }, [speakNow, speechStore]);
+  }, [speakNow, isSpeaking]);
 
   const speak = useCallback(async (
     text: string,
@@ -116,7 +103,6 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
     callbacks?: SpeakCallbacks,
     priority: SpeakPriority = 'normal'
   ) => {
-    ensureInitialized();
     // High priority goes to front of queue
     if (priority === 'high') {
       queueRef.current.unshift({ text, callbacks, priority });
@@ -124,20 +110,15 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
       queueRef.current.push({ text, callbacks, priority });
     }
     processQueue();
-  }, [ensureInitialized, processQueue]);
+  }, [processQueue]);
 
   const stop = useCallback(() => {
     const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
     if (!synth) return;
     synth.cancel();
-    isSpeakingRef.current = false;
-    speechStore.setSpeaking(false);
+    setIsSpeaking(false);
     queueRef.current = [];
-  }, [speechStore]);
-
-  if (autoInitialize) {
-    ensureInitialized();
-  }
+  }, []);
 
   // Initialize voices promptly and react to changes
   useEffect(() => {
@@ -156,10 +137,16 @@ export const useSpeechCoordinator = (options: UseSpeechCoordinatorOptions = {}) 
     };
   }, [selectFallbackVoice]);
 
+  // Auto initialization
+  useEffect(() => {
+    if (autoInitialize && !selectedVoiceRef.current) {
+      selectedVoiceRef.current = selectFallbackVoice();
+    }
+  }, [autoInitialize, selectFallbackVoice]);
+
   return {
     speak,
     stop,
+    isSpeaking,
   };
 };
-
-

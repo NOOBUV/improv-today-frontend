@@ -1,4 +1,4 @@
-// Use same-origin by default; Next rewrites proxy to backend
+// Consolidated API client - merging functionality from api.ts and api-client.ts
 const API_BASE_URL = '';
 
 export interface ApiResponse<T> {
@@ -25,14 +25,11 @@ class ApiClient {
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseUrl}${endpoint}`;
-      console.log('🔥 API Client making request to:', url);
       
       const token = this.getAuthToken();
       if (!token) {
         throw new Error('No authentication token found. Please log in.');
       }
-
-      console.log('🔑 Using Bearer token:', token);
 
       const config: RequestInit = {
         headers: {
@@ -47,7 +44,8 @@ class ApiClient {
       const response = await fetch(url, config);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
@@ -57,6 +55,53 @@ class ApiClient {
         error: error instanceof Error ? error.message : 'Unknown error occurred',
       };
     }
+  }
+
+  // Session endpoints
+  async startSession(params: { 
+    personality?: string; 
+    topic?: string; 
+    session_type?: string; 
+  } = {}): Promise<ApiResponse<{ session_id: number }>> {
+    return this.request<{ session_id: number }>('/api/backend/sessions/start', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_type: params.session_type || 'practice',
+        topic: params.topic ?? null,
+        personality: params.personality ?? 'friendly',
+      }),
+    });
+  }
+
+  async endSession(sessionId: number) {
+    return this.request('/api/backend/sessions/end', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+  }
+
+  // Conversation endpoints
+  async sendConversationMessage(
+    message: string,
+    topic?: string,
+    personality?: string,
+    sessionId?: number,
+    lastAiReply?: string
+  ): Promise<ApiResponse<{ response: string; feedback?: unknown }>> {
+    return this.request<{ response: string; feedback?: unknown }>('/api/backend/conversation', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        message, 
+        topic, 
+        personality, 
+        session_id: sessionId, 
+        last_ai_reply: lastAiReply 
+      }),
+    });
+  }
+
+  async getConversationHistory(limit = 10) {
+    return this.request(`/api/backend/conversation/history?limit=${limit}`);
   }
 
   // Vocabulary endpoints
@@ -74,45 +119,6 @@ class ApiClient {
   async getVocabularyStats() {
     return this.request('/api/backend/vocabulary/stats');
   }
-
-  // Conversation endpoints
-  async sendConversationMessage(
-    message: string,
-    topic?: string,
-    personality?: string,
-    sessionId?: number,
-    lastAiReply?: string
-  ): Promise<ApiResponse<{ response: string; feedback?: unknown }>> {
-    return this.request<{ response: string; feedback?: unknown }>('/api/backend/conversation', {
-      method: 'POST',
-      body: JSON.stringify({ message, topic, personality, session_id: sessionId, last_ai_reply: lastAiReply }),
-    });
-  }
-
-  async getConversationHistory(limit = 10) {
-    return this.request(`/api/backend/conversation/history?limit=${limit}`);
-  }
-
-  // Sessions (minimal loop)
-  async startSession(params: { personality?: string; topic?: string } = {}): Promise<ApiResponse<{ session_id: number }>> {
-    return this.request<{ session_id: number }>('/api/backend/sessions/start', {
-      method: 'POST',
-      body: JSON.stringify({
-        session_type: 'practice',
-        topic: params.topic ?? null,
-        personality: params.personality ?? 'friendly',
-      }),
-    });
-  }
-
-  async endSession(sessionId: number) {
-    return this.request('/api/backend/sessions/end', {
-      method: 'POST',
-      body: JSON.stringify({ session_id: sessionId }),
-    });
-  }
-
-  // Speech analysis removed - using browser APIs only
 
   // Progress tracking endpoints
   async getProgressData(timeframe: 'week' | 'month' | 'year' = 'week') {
@@ -154,11 +160,13 @@ export const apiClient = new ApiClient();
 
 // Export individual methods for easier importing
 export const {
+  startSession,
+  endSession,
+  sendConversationMessage,
+  getConversationHistory,
   getWeeklyVocabulary,
   updateWordUsage,
   getVocabularyStats,
-  sendConversationMessage,
-  getConversationHistory,
   getProgressData,
   saveSessionData,
   getUserProfile,

@@ -2,8 +2,15 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+interface User {
+  name?: string;
+  email?: string;
+  sub?: string;
+  [key: string]: unknown;
+}
+
 interface AuthContextType {
-  user: any;
+  user: User | null;
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -27,7 +34,7 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [token, setToken] = useState<string | null>(null);
-  const [sessionUser, setSessionUser] = useState<any>(null);
+  const [sessionUser, setSessionUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const checkSession = async () => {
@@ -46,7 +53,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
     } catch (error) {
-      console.error('Failed to check session:', error);
       // Clear any stale session data
       setSessionUser(null);
       setToken(null);
@@ -60,18 +66,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const response = await fetch('/api/auth/token');
       if (response.ok) {
-        const { accessToken, tokenType } = await response.json();
+        const { accessToken } = await response.json();
         setToken(accessToken);
         localStorage.setItem('auth_token', accessToken);
-        console.log('🔑 Retrieved access token:', tokenType);
       }
     } catch (error) {
-      console.error('Failed to fetch access token:', error);
       // Fallback to demo token for development
       const demoToken = 'demo-jwt-token';
       setToken(demoToken);
       localStorage.setItem('auth_token', demoToken);
-      console.log('🎭 Using demo token as fallback');
     }
   };
 
