@@ -31,12 +31,6 @@ export const config = {
     updateInterval: 1000, // ms for session duration updates
   },
   
-  // WebSocket configuration
-  websocket: {
-    reconnectAttempts: 5,
-    reconnectDelay: 3000, // ms
-    heartbeatInterval: 30000, // ms
-  },
   
   // UI configuration
   ui: {
