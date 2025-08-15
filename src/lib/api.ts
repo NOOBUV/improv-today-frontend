@@ -14,21 +14,37 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  private getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('auth_token');
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseUrl}${endpoint}`;
+      console.log('🔥 API Client making request to:', url);
+      
+      const token = this.getAuthToken();
+      if (!token) {
+        throw new Error('No authentication token found. Please log in.');
+      }
+
+      console.log('🔑 Using Bearer token:', token);
+
       const config: RequestInit = {
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
           ...options.headers,
         },
+        credentials: 'omit', // Don't send cookies - use Bearer token instead
         ...options,
       };
 
-      const response = await fetch(url, { ...config, credentials: 'include' });
+      const response = await fetch(url, config);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -67,24 +83,10 @@ class ApiClient {
     sessionId?: number,
     lastAiReply?: string
   ): Promise<ApiResponse<{ response: string; feedback?: unknown }>> {
-    try {
-      const response = await fetch(`/api/backend/conversation`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, topic, personality, session_id: sessionId, last_ai_reply: lastAiReply }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return { data } as ApiResponse<{ response: string; feedback?: unknown }>;
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      };
-    }
+    return this.request<{ response: string; feedback?: unknown }>('/api/backend/conversation', {
+      method: 'POST',
+      body: JSON.stringify({ message, topic, personality, session_id: sessionId, last_ai_reply: lastAiReply }),
+    });
   }
 
   async getConversationHistory(limit = 10) {
@@ -95,7 +97,6 @@ class ApiClient {
   async startSession(params: { personality?: string; topic?: string } = {}): Promise<ApiResponse<{ session_id: number }>> {
     return this.request<{ session_id: number }>('/api/backend/sessions/start', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_type: 'practice',
         topic: params.topic ?? null,
@@ -107,7 +108,6 @@ class ApiClient {
   async endSession(sessionId: number) {
     return this.request('/api/backend/sessions/end', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId }),
     });
   }

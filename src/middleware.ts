@@ -1,17 +1,11 @@
-import { NextRequest } from 'next/server';
-import { auth0 } from './utils/auth0';
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-export function middleware(request: NextRequest) {
-  return auth0.middleware(request);
+export async function middleware(request: NextRequest) {
+  // Simple pass-through middleware - Auth0 session handling is done at the route level
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    // Mount built-in Auth0 routes under /auth/*
-    '/auth/:path*',
-    // Protect backend proxy by default
-    '/api/backend/:path*',
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)"]
 };
-
-

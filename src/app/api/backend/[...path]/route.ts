@@ -1,25 +1,45 @@
 import { NextResponse } from 'next/server';
-import { auth0 } from '@/utils/auth0';
+import { auth0 } from '@/lib/auth0';
 
 const API_BASE = process.env.API_URL || 'http://localhost:8000';
 
 async function handle(req: Request) {
   try {
-    // Get session from Auth0
-    const session = await auth0.getSession();
-    console.log('Session exists:', !!session);
+    console.log('🚀 Auth0 Bearer proxy hit for:', req.url);
     
-    if (!session) {
-      console.log('No session found for API proxy request');
+    // Try to get session and access token from Auth0
+    let accessToken: string | null = null;
+    
+    try {
+      const session = await auth0.getSession();
+      console.log('🔍 Auth0 session exists:', !!session);
+      
+      if (session) {
+        accessToken = (session.accessToken as string) || null;
+        console.log('✅ Auth0 access token retrieved:', !!accessToken);
+        
+        if (accessToken) {
+          console.log('🔑 Token type:', accessToken.startsWith('eyJ') ? 'JWT' : 'opaque');
+        }
+      }
+    } catch (auth0Error) {
+      console.log('⚠️ Auth0 token retrieval failed, trying fallback:', auth0Error);
+      
+      // Fallback: check for demo token in Authorization header
+      const authHeader = req.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        accessToken = authHeader.replace('Bearer ', '');
+        console.log('🎭 Using fallback token:', accessToken.substring(0, 20) + '...');
+      }
+    }
+    
+    if (!accessToken) {
+      console.log('❌ No valid Bearer token found');
       return NextResponse.json(
-        { error: 'Authentication required - no session' },
+        { error: 'Authentication required - Bearer token missing' },
         { status: 401 }
       );
     }
-    
-    // Get access token from Auth0
-    const { token: accessToken } = await auth0.getAccessToken();
-    console.log('Access token exists:', !!accessToken);
     
     // Build the backend URL
     const { pathname, search } = new URL(req.url);
@@ -39,6 +59,7 @@ async function handle(req: Request) {
     }
     
     // Forward request to backend
+    console.log('Forwarding to backend:', { url, method: req.method, hasAuth: !!headers.Authorization });
     const response = await fetch(url, {
       method: req.method,
       headers,
@@ -47,6 +68,11 @@ async function handle(req: Request) {
     
     // Get response data
     const responseData = await response.text();
+    console.log('Backend response:', { status: response.status, hasData: !!responseData });
+    
+    if (!response.ok) {
+      console.error('Backend error response:', responseData);
+    }
     
     // Return response with same status and headers
     return new NextResponse(responseData, {

@@ -14,14 +14,6 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/api/:path*`,
       },
       {
-        source: '/api/conversation/:path*',
-        destination: `${backendUrl}/api/conversation/:path*`,
-      },
-      {
-        source: '/api/session/:path*',
-        destination: `${backendUrl}/api/session/:path*`,
-      },
-      {
         source: '/api/ws',
         destination: `${backendUrl}/api/ws`,
       },

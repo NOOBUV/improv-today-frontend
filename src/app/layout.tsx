@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Auth0Provider } from '@auth0/nextjs-auth0';
+import { AuthProvider } from "@/components/AuthProvider";
+import { AuthGuard } from "@/components/AuthGuard";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -44,11 +45,13 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="font-sans antialiased">
-        <Auth0Provider>
-          <main className="min-h-screen">
-            {children}
-          </main>
-        </Auth0Provider>
+        <AuthProvider>
+          <AuthGuard>
+            <main className="min-h-screen">
+              {children}
+            </main>
+          </AuthGuard>
+        </AuthProvider>
       </body>
     </html>
   );
