@@ -63,7 +63,7 @@ async function handle(req: Request) {
     const response = await fetch(url, {
       method: req.method,
       headers,
-      body,
+      body: body || null,
     });
     
     // Get response data
