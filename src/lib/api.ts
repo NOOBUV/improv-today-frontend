@@ -25,14 +25,12 @@ class ApiClient {
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseUrl}${endpoint}`;
-      console.log('🔥 API Client making request to:', url);
       
       const token = this.getAuthToken();
       if (!token) {
         throw new Error('No authentication token found. Please log in.');
       }
 
-      console.log('🔑 Using Bearer token:', token);
 
       const config: RequestInit = {
         headers: {

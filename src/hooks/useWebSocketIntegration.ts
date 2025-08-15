@@ -79,17 +79,14 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
     // Trigger speech synthesis with mutex protection
     speechCoordinator.speak(response, undefined, {
       onStart: () => {
-        console.log('AI started speaking response');
       },
       onEnd: () => {
-        console.log('AI finished speaking response');
         // Auto-start listening after AI finishes speaking
         setTimeout(() => {
           conversationStore.autoStartListening();
         }, 500);
       },
-      onError: (error: unknown) => {
-        console.error('Speech synthesis error:', error);
+      onError: () => {
         uiStore.addNotification({
           type: 'error',
           title: 'Speech Error',
@@ -101,8 +98,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
           conversationStore.autoStartListening();
         }, 500);
       },
-    }, 'normal').catch((error: unknown) => {
-      console.error('Failed to queue AI speech:', error);
+    }, 'normal').catch(() => {
       // Fallback to direct auto-start listening
       setTimeout(() => {
         conversationStore.autoStartListening();
@@ -133,9 +129,8 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
   }, [conversationStore, uiStore]);
 
   const handleError = useCallback((data: { message: string; code?: string }) => {
-    const { message, code } = data;
+    const { message } = data;
     
-    console.error('WebSocket error:', { message, code });
     
     conversationStore.setError(`WebSocket error: ${message}`);
     
@@ -148,9 +143,8 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
   }, [conversationStore, uiStore]);
 
   const handleSessionEnded = useCallback((data: { reason?: string; stats?: unknown }) => {
-    const { reason, stats } = data;
+    const { reason } = data;
     
-    console.log('Session ended:', { reason, stats });
     
     // Reset conversation state
     conversationStore.resetConversation();
@@ -163,20 +157,16 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
     });
   }, [conversationStore, uiStore]);
 
-  const handleFeedbackUpdate = useCallback((data: { messageId: string; feedback: unknown }) => {
-    const { messageId, feedback } = data;
-    
+  const handleFeedbackUpdate = useCallback((_data: { messageId: string; feedback: unknown }) => {
     // Update message with new feedback
     // Note: This would require a method in the store to update existing messages
-    console.log('Feedback update:', { messageId, feedback });
-  }, []);
+  }, []); 
 
   // WebSocket message handler
   const handleWebSocketMessage = useCallback((event: MessageEvent) => {
     try {
       const message: WebSocketMessage = JSON.parse(event.data);
       
-      console.log('WebSocket message received:', message);
       
       switch (message.type) {
         case 'conversation_response':
@@ -196,13 +186,10 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
           break;
         case 'pong':
           // Heartbeat response - no action needed
-          console.log('Received heartbeat pong');
           break;
         default:
-          console.warn('Unknown WebSocket message type:', message.type);
       }
     } catch (error) {
-      console.error('Failed to parse WebSocket message:', error);
     }
   }, [
     handleConversationResponse,
@@ -223,7 +210,6 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
       wsRef.current.send(JSON.stringify(wsMessage));
       return true;
     } else {
-      console.warn('WebSocket not connected, cannot send message');
       uiStore.addNotification({
         type: 'warning',
         title: 'Connection Issue',
@@ -309,12 +295,10 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
     isConnectingRef.current = true;
     
     try {
-      console.log('Connecting to WebSocket:', url);
       
       wsRef.current = new WebSocket(url);
 
       wsRef.current.onopen = () => {
-        console.log('WebSocket connected');
         isConnectedRef.current = true;
         isConnectingRef.current = false;
         reconnectCountRef.current = 0;
@@ -331,15 +315,13 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
 
       wsRef.current.onmessage = handleWebSocketMessage;
 
-      wsRef.current.onclose = (event) => {
-        console.log('WebSocket disconnected:', event.code, event.reason);
+      wsRef.current.onclose = () => {
         isConnectedRef.current = false;
         isConnectingRef.current = false;
         
         stopHeartbeat();
         
         if (autoReconnect && reconnectCountRef.current < reconnectAttempts) {
-          console.log(`Attempting to reconnect... (${reconnectCountRef.current + 1}/${reconnectAttempts})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectCountRef.current++;
@@ -362,8 +344,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
         }
       };
 
-      wsRef.current.onerror = (error: Event) => {
-        console.error('WebSocket error:', error);
+      wsRef.current.onerror = () => {
         isConnectingRef.current = false;
         
         uiStore.addNotification({
@@ -373,8 +354,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
           duration: 3000,
         });
       };
-    } catch (error: unknown) {
-      console.error('Failed to create WebSocket connection:', error);
+    } catch {
       isConnectingRef.current = false;
       
       uiStore.addNotification({
@@ -507,10 +487,8 @@ export const useConversationWithStores = () => {
         // Trigger speech synthesis with mutex protection
         speechCoordinator.speak(data.response, undefined, {
           onStart: () => {
-            console.log('AI started speaking (HTTP fallback)');
           },
           onEnd: () => {
-            console.log('AI finished speaking (HTTP fallback)');
             setTimeout(() => {
               conversationStore.autoStartListening();
             }, 500);

@@ -235,17 +235,9 @@ export const useConversationStore = create<ConversationStore>()(
             const isValidTransition = validateTransition(state.currentState, targetState, action);
             
             if (!isValidTransition) {
-              console.warn(
-                `Invalid state transition: ${state.currentState} -> ${targetState}` +
-                (action ? ` (action: ${action})` : '')
-              );
-              return;
+                return;
             }
             
-            console.log(
-              `State transition: ${state.currentState} -> ${targetState}` +
-              (action ? ` (action: ${action})` : '')
-            );
             
             state.currentState = targetState;
             
@@ -568,7 +560,6 @@ export const useConversationStore = create<ConversationStore>()(
         },
         
         handleOnboardingFlow: () => {
-          const state = get();
           // This will be called by components that handle the speech synthesis
           // The store just manages the state transitions
           get().startAISpeaking();
