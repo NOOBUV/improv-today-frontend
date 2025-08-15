@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { SimpleSpeech } from '@/lib/simpleSpeech';
 import { useConversationStore } from '@/store/conversationStore';
+import { config } from '@/lib/config';
 
 interface SpeechInterfaceProps {
   onTranscriptComplete: (transcript: string) => void;
@@ -11,7 +12,7 @@ interface SpeechInterfaceProps {
   aiResponse?: string; // When this changes, speak it and auto-restart listening
 }
 
-export function SpeechInterface({ onTranscriptComplete, disabled = false, aiResponse }: SpeechInterfaceProps) {
+export const SpeechInterface = memo(function SpeechInterface({ onTranscriptComplete, disabled = false, aiResponse }: SpeechInterfaceProps) {
   const speechRef = useRef<SimpleSpeech | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -45,7 +46,7 @@ export function SpeechInterface({ onTranscriptComplete, disabled = false, aiResp
         // Auto-start listening after AI finishes speaking
         setTimeout(() => {
           startListening();
-        }, 500);
+        }, config.aiSpeech.autoStartListeningDelay);
       };
       
       speakAndRestart();
@@ -78,7 +79,7 @@ export function SpeechInterface({ onTranscriptComplete, disabled = false, aiResp
           stopSilenceTimer();
           silenceTimerRef.current = setTimeout(() => {
             handleFinalTranscript(finalText);
-          }, 1200);
+          }, config.speech.silenceTimeout);
         } else {
           setTranscript(t, true);
           stopSilenceTimer();
@@ -153,4 +154,4 @@ export function SpeechInterface({ onTranscriptComplete, disabled = false, aiResp
       </div>
     </div>
   );
-}
+});

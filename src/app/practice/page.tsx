@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { apiClient } from '@/lib/api';
 import { useConversationStore } from '@/store/conversationStore';
@@ -39,7 +39,7 @@ export default function PracticePage() {
     initSession();
   }, [session.selectedPersonality, setBackendSessionId]);
 
-  const handleTranscriptComplete = async (transcript: string) => {
+  const handleTranscriptComplete = useCallback(async (transcript: string) => {
     if (!transcript.trim()) return;
     
     // Add user message
@@ -109,7 +109,7 @@ export default function PracticePage() {
     } finally {
       setProcessing(false);
     }
-  };
+  }, [session.selectedPersonality, session.backendSessionId, addMessage, setProcessing, setError]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-6">

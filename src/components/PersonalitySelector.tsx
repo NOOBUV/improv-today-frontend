@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { useConversationStore, type Personality } from '@/store/conversationStore';
 
@@ -25,7 +26,7 @@ interface PersonalitySelectorProps {
   disabled?: boolean;
 }
 
-export function PersonalitySelector({ disabled = false }: PersonalitySelectorProps) {
+export const PersonalitySelector = memo(function PersonalitySelector({ disabled = false }: PersonalitySelectorProps) {
   const { session, setPersonality } = useConversationStore();
   const { selectedPersonality } = session;
 
@@ -54,4 +55,4 @@ export function PersonalitySelector({ disabled = false }: PersonalitySelectorPro
       </div>
     </div>
   );
-}
+});

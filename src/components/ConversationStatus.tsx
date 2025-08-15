@@ -1,8 +1,9 @@
 'use client';
 
+import { memo } from 'react';
 import { useConversationStore } from '@/store/conversationStore';
 
-export function ConversationStatus() {
+export const ConversationStatus = memo(function ConversationStatus() {
   const { session } = useConversationStore();
   
   return (
@@ -12,4 +13,4 @@ export function ConversationStatus() {
       </div>
     </div>
   );
-}
+});

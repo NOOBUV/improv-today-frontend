@@ -83,7 +83,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
       onEnd: () => {
         // Auto-start listening after AI finishes speaking
         setTimeout(() => {
-          conversationStore.autoStartListening();
+          conversationStore.startListening();
         }, 500);
       },
       onError: () => {
@@ -95,13 +95,13 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
         });
         // Still try to auto-start listening
         setTimeout(() => {
-          conversationStore.autoStartListening();
+          conversationStore.startListening();
         }, 500);
       },
     }, 'normal').catch(() => {
       // Fallback to direct auto-start listening
       setTimeout(() => {
-        conversationStore.autoStartListening();
+        conversationStore.startListening();
       }, 500);
     });
   }, [conversationStore, speechCoordinator, uiStore]);
@@ -190,6 +190,10 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
         default:
       }
     } catch (error) {
+      // Safely handle parsing errors without exposing details
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to parse WebSocket message:', error);
+      }
     }
   }, [
     handleConversationResponse,
@@ -261,8 +265,7 @@ export const useWebSocketIntegration = (config: WebSocketConfig = {}) => {
         personality: session.selectedPersonality,
         skipWelcome,
         userName: session.userName,
-        isFirstTime: session.isFirstTime,
-        onboardingStep: session.onboardingStep,
+        // Note: isFirstTime and onboardingStep removed from simplified store
       },
     });
   }, [conversationStore, sendMessage]);
@@ -439,7 +442,7 @@ export const useConversationWithStores = () => {
       role: 'user' as const,
       content,
       timestamp: new Date(),
-      audioUrl: audioBlob ? URL.createObjectURL(audioBlob) : undefined,
+      ...(audioBlob && { audioUrl: URL.createObjectURL(audioBlob) }),
     };
 
     conversationStore.addMessage(userMessage);
@@ -490,7 +493,7 @@ export const useConversationWithStores = () => {
           },
           onEnd: () => {
             setTimeout(() => {
-              conversationStore.autoStartListening();
+              conversationStore.startListening();
             }, 500);
           },
           onError: (error) => {
@@ -538,7 +541,7 @@ export const useConversationWithStores = () => {
           onEnd: () => {
             console.log('AI finished speaking (fallback)');
             setTimeout(() => {
-              conversationStore.autoStartListening();
+              conversationStore.startListening();
             }, 500);
           },
           onError: (error) => {
@@ -556,7 +559,7 @@ export const useConversationWithStores = () => {
     conversationStore.updateSessionDuration();
     
     // Start backend session (cookie-based anon identity)
-    apiClient.startSession({ personality: conversationStore.session.selectedPersonality, topic }).then((resp) => {
+    apiClient.startSession({ personality: conversationStore.session.selectedPersonality, ...(topic && { topic }) }).then((resp) => {
       const sessionId = resp.data?.session_id;
       if (sessionId) {
         conversationStore.setBackendSessionId(sessionId);
@@ -585,10 +588,10 @@ export const useConversationWithStores = () => {
 
   return {
     messages: conversationStore.messages,
-    isProcessing: conversationStore.ui.isProcessing,
+    isProcessing: conversationStore.isProcessing,
     sendMessage,
     startSession,
-    endSession: () => conversationStore.resetConversation(),
+    endSession: () => conversationStore.reset(),
     clearConversation: () => conversationStore.clearMessages(),
   };
 };
