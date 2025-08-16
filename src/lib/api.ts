@@ -87,8 +87,18 @@ class ApiClient {
     personality?: string,
     sessionId?: number,
     lastAiReply?: string
-  ): Promise<ApiResponse<{ response: string; feedback?: unknown }>> {
-    return this.request<{ response: string; feedback?: unknown }>('/api/backend/conversation', {
+  ): Promise<ApiResponse<{ 
+    response: string; 
+    feedback?: unknown; 
+    suggestion?: { id: number; word: string; definition?: string };
+    used_suggestion_id?: number;
+  }>> {
+    return this.request<{ 
+      response: string; 
+      feedback?: unknown; 
+      suggestion?: { id: number; word: string; definition?: string };
+      used_suggestion_id?: number;
+    }>('/api/backend/conversation', {
       method: 'POST',
       body: JSON.stringify({ 
         message, 
