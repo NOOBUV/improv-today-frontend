@@ -25,6 +25,12 @@ export interface ConversationFeedback {
   overallRating: number; // 0-5
 }
 
+export interface VocabularySuggestion {
+  id: number;
+  word: string;
+  definition?: string;
+}
+
 export interface SessionData {
   userName: string;
   selectedPersonality: Personality;
@@ -49,6 +55,7 @@ export interface ConversationStore {
   // Data
   messages: ConversationMessage[];
   session: SessionData;
+  currentSuggestion: VocabularySuggestion | null;
   
   // Simple actions
   setListening: (listening: boolean) => void;
@@ -69,6 +76,10 @@ export interface ConversationStore {
   setConversationId: (id: string) => void;
   setBackendSessionId: (id: number | null) => void;
   updateSessionDuration: () => void;
+  
+  // Suggestion actions
+  setSuggestion: (suggestion: VocabularySuggestion | null) => void;
+  clearSuggestion: (suggestionId?: number) => void;
   
   // High-level actions
   startListening: () => void;
@@ -95,6 +106,7 @@ export const useConversationStore = create<ConversationStore>()(
       error: null,
       
       messages: [],
+      currentSuggestion: null,
       
       session: {
         userName: '',
@@ -228,6 +240,23 @@ export const useConversationStore = create<ConversationStore>()(
         });
       },
       
+      // Suggestion actions
+      setSuggestion: (suggestion: VocabularySuggestion | null) => {
+        set((state) => {
+          state.currentSuggestion = suggestion;
+        });
+      },
+      
+      clearSuggestion: (suggestionId?: number) => {
+        set((state) => {
+          // If specific ID provided, only clear if it matches current suggestion
+          if (suggestionId !== undefined && state.currentSuggestion?.id !== suggestionId) {
+            return; // Don't clear if IDs don't match
+          }
+          state.currentSuggestion = null;
+        });
+      },
+      
       // High-level actions
       startListening: () => {
         const { setListening, clearTranscript, setError } = get();
@@ -272,13 +301,14 @@ export const useConversationStore = create<ConversationStore>()(
           state.interimTranscript = '';
           state.error = null;
           
-          // Keep session data but clear messages
+          // Keep session data but clear messages and suggestions
           state.messages.forEach(message => {
             if (message.audioUrl) {
               URL.revokeObjectURL(message.audioUrl);
             }
           });
           state.messages = [];
+          state.currentSuggestion = null;
         });
       },
     })),
@@ -306,6 +336,7 @@ export const useTranscriptState = () => useConversationStore(state => ({
 
 export const useSessionState = () => useConversationStore(state => state.session);
 export const useMessages = () => useConversationStore(state => state.messages);
+export const useCurrentSuggestion = () => useConversationStore(state => state.currentSuggestion);
 
 // Status helpers
 export const useCanStartConversation = () => useConversationStore(state => 
