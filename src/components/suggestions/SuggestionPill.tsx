@@ -19,11 +19,11 @@ export function SuggestionPill({ suggestion, className }: SuggestionPillProps) {
     <div className={`animate-in fade-in duration-300 flex justify-center ${className || ''}`}>
       <Badge 
         variant="outline"
-        className="bg-white/10 border-white/20 text-white transition-all duration-300 hover:bg-white/20 text-center max-w-xs px-4 py-2"
+        className="bg-white/10 border-white/20 text-white transition-all duration-300 hover:bg-white/20 text-center max-w-md px-4 py-3 flex flex-col gap-1"
       >
-        Try using: <strong className="font-bold">{suggestion.word}</strong>
+        <span>Try using: <strong className="font-bold">{suggestion.word}</strong></span>
         {suggestion.definition && (
-          <span className="text-white/80 ml-1">({suggestion.definition})</span>
+          <span className="text-white/80 text-sm leading-relaxed">{suggestion.definition}</span>
         )}
       </Badge>
     </div>
