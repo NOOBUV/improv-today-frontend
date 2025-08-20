@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useUser } from '@auth0/nextjs-auth0';
 
 interface User {
   name?: string;
@@ -33,88 +34,51 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const { user: auth0User, isLoading: auth0Loading } = useUser();
   const [token, setToken] = useState<string | null>(null);
-  const [sessionUser, setSessionUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const checkSession = async () => {
-    try {
-      const response = await fetch('/api/auth/profile');
-      if (response.ok) {
-        const userData = await response.json();
-        setSessionUser(userData);
-        
-        // Try to get access token
-        const tokenResponse = await fetch('/api/auth/token');
-        if (tokenResponse.ok) {
-          const { accessToken } = await tokenResponse.json();
-          setToken(accessToken);
-          localStorage.setItem('auth_token', accessToken);
-        }
-      }
-    } catch {
-      // Clear any stale session data
-      setSessionUser(null);
-      setToken(null);
-      localStorage.removeItem('auth_token');
-    }
-  };
+  const [tokenLoading, setTokenLoading] = useState(false);
 
   const fetchAccessToken = useCallback(async () => {
-    if (!sessionUser) return;
+    if (!auth0User) {
+      setToken(null);
+      localStorage.removeItem('auth_token');
+      return;
+    }
     
+    setTokenLoading(true);
     try {
-      const response = await fetch('/api/auth/token');
+      const response = await fetch('/auth/token');
       if (response.ok) {
         const { accessToken } = await response.json();
         setToken(accessToken);
         localStorage.setItem('auth_token', accessToken);
       }
-    } catch {
-      // Fallback to demo token for development
-      const demoToken = 'demo-jwt-token';
-      setToken(demoToken);
-      localStorage.setItem('auth_token', demoToken);
+    } catch (error) {
+      console.error('Failed to fetch access token:', error);
+    } finally {
+      setTokenLoading(false);
     }
-  }, [sessionUser]);
+  }, [auth0User]);
 
   useEffect(() => {
-    const initAuth = async () => {
-      // First check if we have a session cookie
-      await checkSession();
-      setIsLoading(false);
-    };
+    fetchAccessToken();
+  }, [fetchAccessToken]);
 
-    initAuth();
-  }, []);
-
-  useEffect(() => {
-    if (sessionUser) {
-      fetchAccessToken();
-    } else {
-      // No session, check for demo token
-      const savedToken = localStorage.getItem('auth_token');
-      if (savedToken) {
-        setToken(savedToken);
-      }
-    }
-  }, [sessionUser, fetchAccessToken]);
-
-  const refreshToken = async () => {
+  const refreshToken = useCallback(async () => {
     await fetchAccessToken();
-  };
+  }, [fetchAccessToken]);
 
   const logout = () => {
     setToken(null);
     localStorage.removeItem('auth_token');
-    window.location.href = '/api/auth/logout';
+    window.location.href = '/auth/logout';
   };
 
   const value: AuthContextType = {
-    user: sessionUser,
+    user: auth0User || null,
     token,
-    isLoading: isLoading,
-    isAuthenticated: !!sessionUser || !!token,
+    isLoading: auth0Loading || tokenLoading,
+    isAuthenticated: !!auth0User,
     logout,
     refreshToken,
   };

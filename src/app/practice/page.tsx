@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { apiClient } from '@/lib/api';
-import { useConversationStore } from '@/store/conversationStore';
+import { useConversationStore, useCurrentSuggestion } from '@/store/conversationStore';
 import { Auth } from '@/components/Auth';
 import { SpeechInterface } from '@/components/SpeechInterface';
 import { PersonalitySelector } from '@/components/PersonalitySelector';
 import { ConversationStatus } from '@/components/ConversationStatus';
+import { SuggestionPill } from '@/components/suggestions/SuggestionPill';
 
 export default function PracticePage() {
   const lastAIRef = useRef<string>('');
@@ -20,7 +21,11 @@ export default function PracticePage() {
     setProcessing,
     setError,
     setBackendSessionId,
+    setSuggestion,
+    clearSuggestion,
   } = useConversationStore();
+  
+  const currentSuggestion = useCurrentSuggestion();
 
   // Initialize session on load
   useEffect(() => {
@@ -66,6 +71,16 @@ export default function PracticePage() {
       const reply = response.data?.response;
       if (reply) {
         lastAIRef.current = reply;
+        
+        // Handle new suggestion data
+        if (response.data?.suggestion) {
+          setSuggestion(response.data.suggestion);
+        }
+        
+        // Handle used suggestion (remove from display)
+        if (response.data?.used_suggestion_id) {
+          clearSuggestion(response.data.used_suggestion_id);
+        }
         
         // Add AI message
         const aiMessage: Record<string, unknown> = {
@@ -113,7 +128,7 @@ export default function PracticePage() {
     } finally {
       setProcessing(false);
     }
-  }, [session.selectedPersonality, session.backendSessionId, addMessage, setProcessing, setError]);
+  }, [session.selectedPersonality, session.backendSessionId, addMessage, setProcessing, setError, setSuggestion, clearSuggestion]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-6">
@@ -149,6 +164,13 @@ export default function PracticePage() {
         disabled={isProcessing}
         aiResponse={aiResponse}
       />
+      
+      {/* Suggestion Display */}
+      {currentSuggestion && (
+        <div className="mt-6">
+          <SuggestionPill suggestion={currentSuggestion} />
+        </div>
+      )}
       
       {/* Status */}
       <div className="mt-8">

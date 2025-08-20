@@ -8,7 +8,7 @@ export function LoginScreen() {
 
   const handleAuth0Login = () => {
     setIsLogging(true);
-    window.location.href = '/api/auth/login';
+    window.location.href = '/auth/login';
   };
 
   return (
