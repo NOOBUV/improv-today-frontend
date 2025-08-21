@@ -91,13 +91,13 @@ class ApiClient {
     response: string; 
     feedback?: unknown; 
     suggestion?: { id: string; word: string; definition: string; exampleSentence: string };
-    used_suggestion_id?: number;
+    used_suggestion_id?: number | string;
   }>> {
     return this.request<{ 
       response: string; 
       feedback?: unknown; 
       suggestion?: { id: string; word: string; definition: string; exampleSentence: string };
-      used_suggestion_id?: number;
+      used_suggestion_id?: number | string;
     }>('/api/backend/conversation', {
       method: 'POST',
       body: JSON.stringify({ 

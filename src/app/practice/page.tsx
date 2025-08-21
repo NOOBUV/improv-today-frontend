@@ -84,7 +84,7 @@ export default function PracticePage() {
         
         // Handle used suggestion (remove from display)
         if (response.data?.used_suggestion_id) {
-          clearSuggestion(response.data.used_suggestion_id);
+          clearSuggestion(parseInt(response.data.used_suggestion_id.toString()));
         }
         
         // Add AI message

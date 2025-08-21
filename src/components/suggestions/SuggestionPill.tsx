@@ -1,8 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import React from 'react';
 
 export interface SuggestionData {
   id: number;
@@ -17,44 +15,25 @@ export interface SuggestionPillProps {
 }
 
 export function SuggestionPill({ suggestion, className }: SuggestionPillProps) {
-  const [open, setOpen] = useState(false);
-
   return (
-    <div className={`animate-in fade-in duration-300 flex justify-center ${className || ''}`}>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Badge 
-            variant="outline"
-            className="bg-white/10 border-white/20 text-white transition-all duration-300 hover:bg-white/20 cursor-pointer text-center px-4 py-3"
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setOpen(!open);
-              }
-            }}
-          >
-            <span>Try using: <strong className="font-bold">{suggestion.word}</strong></span>
-          </Badge>
-        </PopoverTrigger>
-        <PopoverContent 
-          className="w-80 p-4 bg-white/95 backdrop-blur-sm border border-white/20 text-slate-900"
-          side="top"
-          align="center"
-        >
-          <div className="space-y-3">
-            <div>
-              <h4 className="font-semibold text-lg text-slate-800">{suggestion.word}</h4>
-              <p className="text-sm text-slate-600 mt-1">{suggestion.definition}</p>
-            </div>
-            <div>
-              <h5 className="font-medium text-sm text-slate-700 mb-1">Example:</h5>
-              <p className="text-sm text-slate-600 italic leading-relaxed">&ldquo;{suggestion.exampleSentence}&rdquo;</p>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
+    <div className={`animate-in fade-in duration-300 ${className || ''}`}>
+      <div className="bg-white/10 border border-white/20 backdrop-blur-sm rounded-lg px-3 py-2 text-center max-w-xs mx-auto">
+        {/* Compact header */}
+        <div className="mb-1">
+          <span className="text-xs text-white/70">Try: </span>
+          <span className="text-sm font-bold text-white">{suggestion.word}</span>
+        </div>
+        
+        {/* Definition in smaller text */}
+        <div className="text-xs text-white/85 mb-1 leading-tight">
+          {suggestion.definition}
+        </div>
+        
+        {/* Example in even smaller text */}
+        <div className="text-xs text-white/75 italic leading-tight">
+          "{suggestion.exampleSentence}"
+        </div>
+      </div>
     </div>
   );
 }
