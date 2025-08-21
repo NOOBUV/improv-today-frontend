@@ -74,7 +74,12 @@ export default function PracticePage() {
         
         // Handle new suggestion data
         if (response.data?.suggestion) {
-          setSuggestion(response.data.suggestion);
+          setSuggestion({
+            id: parseInt(response.data.suggestion.id),
+            word: response.data.suggestion.word,
+            definition: response.data.suggestion.definition,
+            exampleSentence: response.data.suggestion.exampleSentence
+          });
         }
         
         // Handle used suggestion (remove from display)

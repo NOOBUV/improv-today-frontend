@@ -90,13 +90,13 @@ class ApiClient {
   ): Promise<ApiResponse<{ 
     response: string; 
     feedback?: unknown; 
-    suggestion?: { id: number; word: string; definition?: string };
+    suggestion?: { id: string; word: string; definition: string; exampleSentence: string };
     used_suggestion_id?: number;
   }>> {
     return this.request<{ 
       response: string; 
       feedback?: unknown; 
-      suggestion?: { id: number; word: string; definition?: string };
+      suggestion?: { id: string; word: string; definition: string; exampleSentence: string };
       used_suggestion_id?: number;
     }>('/api/backend/conversation', {
       method: 'POST',

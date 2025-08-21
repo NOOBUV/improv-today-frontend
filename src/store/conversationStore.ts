@@ -28,7 +28,8 @@ export interface ConversationFeedback {
 export interface VocabularySuggestion {
   id: number;
   word: string;
-  definition?: string;
+  definition: string;
+  exampleSentence: string;
 }
 
 export interface SessionData {
