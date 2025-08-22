@@ -52,9 +52,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const { accessToken } = await response.json();
         setToken(accessToken);
         localStorage.setItem('auth_token', accessToken);
+      } else if (response.status === 401 || response.status === 500) {
+        // Token expired or server error - trigger logout
+        setToken(null);
+        localStorage.removeItem('auth_token');
+        window.location.href = '/auth/logout';
       }
     } catch (error) {
       console.error('Failed to fetch access token:', error);
+      // On network error, also trigger logout
+      setToken(null);
+      localStorage.removeItem('auth_token');
+      window.location.href = '/auth/logout';
     } finally {
       setTokenLoading(false);
     }
