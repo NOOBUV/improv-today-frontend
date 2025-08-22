@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { apiClient } from '@/lib/api';
-import { useConversationStore, useCurrentSuggestion } from '@/store/conversationStore';
+import { useConversationStore, useCurrentSuggestion, VocabularySuggestion } from '@/store/conversationStore';
 import { Auth } from '@/components/Auth';
 import { SpeechInterface } from '@/components/SpeechInterface';
 import { PersonalitySelector } from '@/components/PersonalitySelector';
@@ -23,6 +23,7 @@ export default function PracticePage() {
     setBackendSessionId,
     setSuggestion,
     clearSuggestion,
+    updateSuggestionFeedback,
   } = useConversationStore();
   
   const currentSuggestion = useCurrentSuggestion();
@@ -74,12 +75,24 @@ export default function PracticePage() {
         
         // Handle new suggestion data
         if (response.data?.suggestion) {
-          setSuggestion({
+          const newSuggestion: Partial<VocabularySuggestion> = {
             id: parseInt(response.data.suggestion.id),
             word: response.data.suggestion.word,
             definition: response.data.suggestion.definition,
-            exampleSentence: response.data.suggestion.exampleSentence
-          });
+            exampleSentence: response.data.suggestion.exampleSentence,
+          };
+          
+          // Only include remediationFeedback if it exists and is not empty
+          if (response.data.suggestion.remediationFeedback && response.data.suggestion.remediationFeedback.trim().length > 0) {
+            newSuggestion.remediationFeedback = response.data.suggestion.remediationFeedback;
+          }
+          
+          setSuggestion(newSuggestion as VocabularySuggestion);
+        }
+        
+        // Handle remediation feedback for existing suggestion (AC: 5)
+        if (response.data?.remediation_feedback && currentSuggestion) {
+          updateSuggestionFeedback(currentSuggestion.id, response.data.remediation_feedback);
         }
         
         // Handle used suggestion (remove from display)
@@ -133,7 +146,7 @@ export default function PracticePage() {
     } finally {
       setProcessing(false);
     }
-  }, [session.selectedPersonality, session.backendSessionId, addMessage, setProcessing, setError, setSuggestion, clearSuggestion]);
+  }, [session.selectedPersonality, session.backendSessionId, addMessage, setProcessing, setError, setSuggestion, clearSuggestion, updateSuggestionFeedback, currentSuggestion]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-6">

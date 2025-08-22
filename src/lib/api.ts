@@ -90,14 +90,16 @@ class ApiClient {
   ): Promise<ApiResponse<{ 
     response: string; 
     feedback?: unknown; 
-    suggestion?: { id: string; word: string; definition: string; exampleSentence: string };
+    suggestion?: { id: string; word: string; definition: string; exampleSentence: string; remediationFeedback?: string };
     used_suggestion_id?: number | string;
+    remediation_feedback?: string; // AC: 4 - Include remediation feedback from backend
   }>> {
     return this.request<{ 
       response: string; 
       feedback?: unknown; 
-      suggestion?: { id: string; word: string; definition: string; exampleSentence: string };
+      suggestion?: { id: string; word: string; definition: string; exampleSentence: string; remediationFeedback?: string };
       used_suggestion_id?: number | string;
+      remediation_feedback?: string; // AC: 4 - Include remediation feedback from backend
     }>('/api/backend/conversation', {
       method: 'POST',
       body: JSON.stringify({ 

@@ -30,6 +30,7 @@ export interface VocabularySuggestion {
   word: string;
   definition: string;
   exampleSentence: string;
+  remediationFeedback?: string; // AC: 5 - Optional remediation feedback for incorrect usage
 }
 
 export interface SessionData {
@@ -81,6 +82,7 @@ export interface ConversationStore {
   // Suggestion actions
   setSuggestion: (suggestion: VocabularySuggestion | null) => void;
   clearSuggestion: (suggestionId?: number) => void;
+  updateSuggestionFeedback: (suggestionId: number, feedback: string) => void;
   
   // High-level actions
   startListening: () => void;
@@ -255,6 +257,15 @@ export const useConversationStore = create<ConversationStore>()(
             return; // Don't clear if IDs don't match
           }
           state.currentSuggestion = null;
+        });
+      },
+      
+      updateSuggestionFeedback: (suggestionId: number, feedback: string) => {
+        set((state) => {
+          // Only update if the feedback is for the current suggestion
+          if (state.currentSuggestion?.id === suggestionId) {
+            state.currentSuggestion.remediationFeedback = feedback;
+          }
         });
       },
       
