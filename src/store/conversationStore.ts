@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { useShallow } from 'zustand/react/shallow';
 
 // ===== TYPES =====
 
@@ -332,25 +333,30 @@ export const useConversationStore = create<ConversationStore>()(
 
 // ===== SELECTORS =====
 
-// Simple selectors for common state combinations
-export const useConversationState = () => useConversationStore(state => ({
-  isListening: state.isListening,
-  isAISpeaking: state.isAISpeaking,
-  isProcessing: state.isProcessing,
-  isPaused: state.isPaused,
-  error: state.error,
-}));
+// Object selectors using useShallow to prevent infinite loops
+export const useConversationState = () => useConversationStore(
+  useShallow((state) => ({
+    isListening: state.isListening,
+    isAISpeaking: state.isAISpeaking,
+    isProcessing: state.isProcessing,
+    isPaused: state.isPaused,
+    error: state.error,
+  }))
+);
 
-export const useTranscriptState = () => useConversationStore(state => ({
-  transcript: state.transcript,
-  interimTranscript: state.interimTranscript,
-}));
+export const useTranscriptState = () => useConversationStore(
+  useShallow((state) => ({
+    transcript: state.transcript,
+    interimTranscript: state.interimTranscript,
+  }))
+);
 
-export const useSessionState = () => useConversationStore(state => state.session);
-export const useMessages = () => useConversationStore(state => state.messages);
-export const useCurrentSuggestion = () => useConversationStore(state => state.currentSuggestion);
+// Primitive selectors don't need useShallow
+export const useSessionState = () => useConversationStore((state) => state.session);
+export const useMessages = () => useConversationStore((state) => state.messages);
+export const useCurrentSuggestion = () => useConversationStore((state) => state.currentSuggestion);
 
 // Status helpers
-export const useCanStartConversation = () => useConversationStore(state => 
+export const useCanStartConversation = () => useConversationStore((state) => 
   !state.isListening && !state.isAISpeaking && !state.isProcessing
 );
