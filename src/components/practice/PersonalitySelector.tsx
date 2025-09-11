@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import { Button } from '@/components/ui/button';
-import { useConversationStore, type Personality } from '@/store/conversationStore';
+import { usePracticeStore, type Personality } from '@/store/practiceStore';
 
 const PERSONALITIES: { value: Personality; label: string; description: string }[] = [
   { 
@@ -27,7 +27,7 @@ interface PersonalitySelectorProps {
 }
 
 export const PersonalitySelector = memo(function PersonalitySelector({ disabled = false }: PersonalitySelectorProps) {
-  const { session, setPersonality } = useConversationStore();
+  const { session, setPersonality } = usePracticeStore();
   const { selectedPersonality } = session;
 
   const handlePersonalityChange = (personality: Personality) => {

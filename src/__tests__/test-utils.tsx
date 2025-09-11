@@ -91,11 +91,11 @@ Object.defineProperty(window, 'cancelAnimationFrame', {
 // Mock Framer Motion
 jest.mock('framer-motion', () => ({
   motion: {
-    div: ({ children, ...props }: any) => React.createElement('div', props, children),
-    button: ({ children, ...props }: any) => React.createElement('button', props, children),
+    div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => React.createElement('div', props, children),
+    button: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => React.createElement('button', props, children),
   },
   useAnimationFrame: jest.fn(() => {}),
-  AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
+  AnimatePresence: ({ children }: React.PropsWithChildren<Record<string, unknown>>) => React.createElement(React.Fragment, null, children),
 }))
 
 // Mock Zustand stores - only provide default implementations
@@ -121,7 +121,13 @@ jest.mock('@/store/conversationStore', () => ({
 
 // Mock VoiceWaveform component
 jest.mock('@/components/VoiceWaveform', () => ({
-  VoiceWaveform: ({ isListening, isSpeaking, onCentralCircleClick, disabled, emotionalMood }: any) => (
+  VoiceWaveform: ({ isListening, isSpeaking, onCentralCircleClick, disabled, emotionalMood }: {
+    isListening: boolean;
+    isSpeaking: boolean;
+    onCentralCircleClick: () => void;
+    disabled: boolean;
+    emotionalMood: string;
+  }) => (
     <div data-testid="voice-waveform">
       <button
         data-testid="central-circle"
@@ -139,12 +145,16 @@ jest.mock('@/components/VoiceWaveform', () => ({
 
 // Mock SpeechInterface component
 jest.mock('@/components/SpeechInterface', () => ({
-  SpeechInterface: React.forwardRef(({
-    onTranscriptComplete,
-    disabled,
-    aiResponse,
-    onAudioStream
-  }: any, ref: any) => (
+  SpeechInterface: React.forwardRef<
+    { handleToggle: () => void } | null,
+    {
+      onTranscriptComplete: (transcript: string) => void;
+      disabled: boolean;
+      aiResponse?: string;
+      onAudioStream?: (stream: MediaStream | null) => void;
+    }
+  >(function SpeechInterface({ onTranscriptComplete, disabled, aiResponse }) {
+    return (
     <div data-testid="speech-interface">
       <button
         data-testid="speech-toggle"
@@ -159,12 +169,13 @@ jest.mock('@/components/SpeechInterface', () => ({
       </button>
       {aiResponse && <div data-testid="ai-response">{aiResponse}</div>}
     </div>
-  )),
+    );
+  }),
 }))
 
 // Mock EmotionalBackdrop component
 jest.mock('@/components/EmotionalBackdrop', () => ({
-  EmotionalBackdrop: ({ mood }: any) => (
+  EmotionalBackdrop: ({ mood }: { mood: string }) => (
     <div data-testid="emotional-backdrop" data-mood={mood}>
       Emotional Backdrop
     </div>
@@ -208,7 +219,7 @@ export const waitForAnimationFrame = () =>
   })
 
 // Mock fetch for API testing
-export const mockFetchResponse = (data: any, ok = true) => {
+export const mockFetchResponse = (data: unknown, ok = true) => {
   global.fetch = jest.fn(() =>
     Promise.resolve({
       ok,

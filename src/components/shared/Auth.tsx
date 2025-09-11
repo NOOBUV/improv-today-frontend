@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from './AuthProvider';
-import { Button } from './ui/button';
+import { Button } from '../ui/button';
 
 export function Auth() {
   const { user, isLoading, logout } = useAuth();

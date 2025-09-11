@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { apiClient } from '@/lib/api';
-import { useConversationStore, useCurrentSuggestion, VocabularySuggestion } from '@/store/conversationStore';
-import { Auth } from '@/components/Auth';
-import { SpeechInterface } from '@/components/SpeechInterface';
-import { PersonalitySelector } from '@/components/PersonalitySelector';
-import { ConversationStatus } from '@/components/ConversationStatus';
-import { SuggestionPill } from '@/components/suggestions/SuggestionPill';
+import { usePracticeStore, usePracticeCurrentSuggestion, VocabularySuggestion } from '@/store/practiceStore';
+import { Auth } from '@/components/shared/Auth';
+import { SpeechInterface } from '@/components/shared/SpeechInterface';
+import { PersonalitySelector } from '@/components/practice/PersonalitySelector';
+import { ConversationStatus } from '@/components/practice/ConversationStatus';
+import { SuggestionPill } from '@/components/practice/suggestions/SuggestionPill';
+import { RouteGuard } from '@/components/shared/RouteGuard';
 
 export default function PracticePage() {
   const lastAIRef = useRef<string>('');
@@ -24,9 +25,9 @@ export default function PracticePage() {
     setSuggestion,
     clearSuggestion,
     updateSuggestionFeedback,
-  } = useConversationStore();
+  } = usePracticeStore();
   
-  const currentSuggestion = useCurrentSuggestion();
+  const currentSuggestion = usePracticeCurrentSuggestion();
 
   // Initialize session on load
   useEffect(() => {
@@ -149,7 +150,13 @@ export default function PracticePage() {
   }, [session.selectedPersonality, session.backendSessionId, addMessage, setProcessing, setError, setSuggestion, clearSuggestion, updateSuggestionFeedback, currentSuggestion]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-6">
+    <RouteGuard 
+      route="/practice" 
+      disabled={true} 
+      redirectTo="/conversation"
+      disabledMessage="The practice system has been temporarily disabled. Please use the conversation system instead."
+    >
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-6">
       <div className="absolute top-4 right-4">
         <Auth />
       </div>
@@ -195,5 +202,6 @@ export default function PracticePage() {
         <ConversationStatus />
       </div>
     </div>
+    </RouteGuard>
   );
 }

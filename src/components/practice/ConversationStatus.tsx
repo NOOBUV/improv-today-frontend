@@ -1,10 +1,10 @@
 'use client';
 
 import { memo } from 'react';
-import { useConversationStore } from '@/store/conversationStore';
+import { usePracticeStore } from '@/store/practiceStore';
 
 export const ConversationStatus = memo(function ConversationStatus() {
-  const { session } = useConversationStore();
+  const { session } = usePracticeStore();
   
   return (
     <div className="text-center">

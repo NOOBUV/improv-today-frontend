@@ -2,22 +2,23 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { 
-  useConversationStore,
-  useConversationState,
-  useMessages,
-  useSessionState
-} from '@/store/conversationStore';
+  useAvaStore,
+  useAvaConversationState,
+  useAvaMessages,
+  useAvaSessionState
+} from '@/store/avaStore';
 import { useShallow } from 'zustand/react/shallow';
-import { SpeechInterface } from '@/components/SpeechInterface';
-import { EmotionalBackdrop, type EmotionalMood } from '@/components/EmotionalBackdrop';
-import { VoiceWaveform } from '@/components/VoiceWaveform';
+import { SpeechInterface } from '@/components/shared/SpeechInterface';
+import { EmotionalBackdrop, type EmotionalMood } from '@/components/ava/EmotionalBackdrop';
+import { VoiceWaveform } from '@/components/ava/VoiceWaveform';
+import { Auth } from '@/components/shared/Auth';
 
 export default function ConversationPage() {
   // Use selective hooks consistently
-  const { isProcessing, isListening, isAISpeaking } = useConversationState();
-  const session = useSessionState();
-  const messages = useMessages();
-  const { addMessage, setProcessing, setUserName, setPersonality } = useConversationStore(
+  const { isProcessing, isListening, isAISpeaking } = useAvaConversationState();
+  const session = useAvaSessionState();
+  const messages = useAvaMessages();
+  const { addMessage, setProcessing, setUserName, setPersonality } = useAvaStore(
     useShallow((state) => ({
       addMessage: state.addMessage,
       setProcessing: state.setProcessing,
@@ -228,13 +229,18 @@ export default function ConversationPage() {
       <div className="relative z-10 flex flex-col h-screen">
         {/* Header */}
         <header className="p-4 bg-black/20 backdrop-blur-sm border-b border-white/10" role="banner">
-          <div className="max-w-4xl mx-auto">
-            <h1 className="text-2xl font-bold text-white" id="main-heading">
-              Conversation with Ava
-            </h1>
-            <p className="text-white/60 text-sm mt-1" aria-live="polite">
-              Personality: {session.selectedPersonality} • {messages.length} messages
-            </p>
+          <div className="max-w-4xl mx-auto flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl font-bold text-white" id="main-heading">
+                Conversation with Ava
+              </h1>
+              <p className="text-white/60 text-sm mt-1" aria-live="polite">
+                Personality: {session.selectedPersonality} • {messages.length} messages
+              </p>
+            </div>
+            <div className="flex-shrink-0">
+              <Auth />
+            </div>
           </div>
         </header>
 

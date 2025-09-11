@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
 export default function Home() {
-  // Redirect root to practice interface
-  redirect('/practice');
+  // Redirect root to conversation interface (Ava system)
+  redirect('/conversation');
 }
