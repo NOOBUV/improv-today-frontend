@@ -1,27 +1,25 @@
 'use client';
 
 import { useAuth } from './AuthProvider';
-import { Button } from '../ui/button';
+import { UserProfile } from '../subscription/UserProfile';
 
 export function Auth() {
-  const { user, isLoading, logout } = useAuth();
+  const { user, isLoading } = useAuth();
 
   if (isLoading) {
     return <div className="text-sm text-gray-500">Loading...</div>;
   }
 
+  if (!user) {
+    return null;
+  }
+
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-gray-700">
-        Welcome, {user?.name || user?.email}
+      <span className="text-sm text-gray-700 hidden sm:inline">
+        Welcome, {user.name || user.email}
       </span>
-      <Button 
-        variant="outline" 
-        size="sm"
-        onClick={logout}
-      >
-        Logout
-      </Button>
+      <UserProfile />
     </div>
   );
 }

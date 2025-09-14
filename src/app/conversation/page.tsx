@@ -12,12 +12,14 @@ import { SpeechInterface } from '@/components/shared/SpeechInterface';
 import { EmotionalBackdrop, type EmotionalMood } from '@/components/ava/EmotionalBackdrop';
 import { VoiceWaveform } from '@/components/ava/VoiceWaveform';
 import { Auth } from '@/components/shared/Auth';
+import { useAuth } from '@/components/shared/AuthProvider';
 
 export default function ConversationPage() {
   // Use selective hooks consistently
   const { isProcessing, isListening, isAISpeaking } = useAvaConversationState();
   const session = useAvaSessionState();
   const messages = useAvaMessages();
+  const { token, isAuthenticated } = useAuth();
   const { addMessage, setProcessing, setUserName, setPersonality } = useAvaStore(
     useShallow((state) => ({
       addMessage: state.addMessage,
@@ -108,11 +110,17 @@ export default function ConversationPage() {
     addMessage(userMessage);
     
     try {
+      // Check if user is authenticated
+      if (!isAuthenticated || !token) {
+        throw new Error('Authentication required');
+      }
+
       // Make API call to backend
       const response = await fetch('/api/backend/ava/conversation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           message: transcript,
@@ -121,6 +129,9 @@ export default function ConversationPage() {
       });
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('Authentication failed. Please log in again.');
+        }
         throw new Error(`API error: ${response.status}`);
       }
 

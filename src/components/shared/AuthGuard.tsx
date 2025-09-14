@@ -3,12 +3,14 @@
 import { ReactNode } from 'react';
 import { useUser } from '@auth0/nextjs-auth0';
 import { LoginScreen } from './LoginScreen';
+import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 
 interface AuthGuardProps {
   children: ReactNode;
+  requireSubscription?: boolean;
 }
 
-export function AuthGuard({ children }: AuthGuardProps) {
+export function AuthGuard({ children, requireSubscription = true }: AuthGuardProps) {
   const { user, error, isLoading } = useUser();
 
   if (isLoading) {
@@ -23,6 +25,15 @@ export function AuthGuard({ children }: AuthGuardProps) {
   // Auth0 v4 sometimes returns "Unauthorized" errors instead of null user
   if (error || !user) {
     return <LoginScreen />;
+  }
+
+  // If subscription is required, wrap in SubscriptionGuard
+  if (requireSubscription) {
+    return (
+      <SubscriptionGuard>
+        {children}
+      </SubscriptionGuard>
+    );
   }
 
   return <>{children}</>;
