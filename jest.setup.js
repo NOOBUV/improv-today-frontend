@@ -81,3 +81,17 @@ Object.defineProperty(navigator, 'mediaDevices', {
 // Mock requestAnimationFrame
 global.requestAnimationFrame = jest.fn().mockImplementation(cb => setTimeout(cb, 16))
 global.cancelAnimationFrame = jest.fn().mockImplementation(id => clearTimeout(id))
+
+// Mock Auth0
+jest.mock('@auth0/nextjs-auth0', () => ({
+  useUser: jest.fn(() => ({
+    user: null,
+    error: null,
+    isLoading: false,
+  })),
+}))
+
+// Mock Auth0 client
+jest.mock('@auth0/nextjs-auth0/server', () => ({
+  Auth0Client: jest.fn().mockImplementation(() => ({})),
+}))

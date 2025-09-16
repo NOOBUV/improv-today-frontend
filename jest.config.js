@@ -24,7 +24,7 @@ const customJestConfig = {
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   transformIgnorePatterns: [
-    '/node_modules/(?!(@auth0|framer-motion)/)',
+    '/node_modules/(?!(@auth0)/)',
   ],
   testPathIgnorePatterns: [
     '<rootDir>/.next/',

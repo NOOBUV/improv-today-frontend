@@ -13,6 +13,8 @@ import { EmotionalBackdrop, type EmotionalMood } from '@/components/ava/Emotiona
 import { VoiceWaveform } from '@/components/ava/VoiceWaveform';
 import { Auth } from '@/components/shared/Auth';
 import { useAuth } from '@/components/shared/AuthProvider';
+import { useAdminAuth } from '@/hooks/useAdminAuth';
+import Link from 'next/link';
 
 export default function ConversationPage() {
   // Use selective hooks consistently
@@ -20,6 +22,7 @@ export default function ConversationPage() {
   const session = useAvaSessionState();
   const messages = useAvaMessages();
   const { token, isAuthenticated } = useAuth();
+  const { isAdmin } = useAdminAuth();
   const { addMessage, setProcessing, setUserName, setPersonality } = useAvaStore(
     useShallow((state) => ({
       addMessage: state.addMessage,
@@ -239,16 +242,37 @@ export default function ConversationPage() {
       {/* Main Content */}
       <div className="relative z-10 flex flex-col h-screen">
         {/* Header */}
-        <header className="p-4 bg-black/20 backdrop-blur-sm border-b border-white/10" role="banner">
-          <div className="max-w-4xl mx-auto flex justify-between items-start">
-            <div>
-              <h1 className="text-2xl font-bold text-white" id="main-heading">
-                Conversation with Ava
-              </h1>
-              <p className="text-white/60 text-sm mt-1" aria-live="polite">
-                Personality: {session.selectedPersonality} • {messages.length} messages
-              </p>
+        <header className="p-4 bg-black/30 backdrop-blur-md border-b border-white/20" role="banner">
+          <div className="max-w-4xl mx-auto flex justify-between items-center">
+            <div className="flex items-center gap-6">
+              <div>
+                <h1 className="text-2xl font-bold text-white" id="main-heading">
+                  Conversation with Ava
+                </h1>
+                <p className="text-white/70 text-sm mt-1" aria-live="polite">
+                  Personality: {session.selectedPersonality} • {messages.length} messages
+                </p>
+              </div>
+              
+              {/* Admin Navigation Button - Only visible to admins */}
+              {isAdmin && (
+                <Link
+                  href="/admin/journal"
+                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all duration-200 border border-white/20 hover:border-white/30"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                    />
+                  </svg>
+                  <span className="text-sm font-medium">Admin Panel</span>
+                </Link>
+              )}
             </div>
+            
             <div className="flex-shrink-0">
               <Auth />
             </div>

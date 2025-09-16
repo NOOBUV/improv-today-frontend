@@ -16,8 +16,8 @@ export function Auth() {
 
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-gray-700 hidden sm:inline">
-        Welcome, {user.name || user.email}
+      <span className="text-sm text-white/80 hidden sm:inline font-medium">
+        {user.name || user.email}
       </span>
       <UserProfile />
     </div>
