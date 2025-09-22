@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { useAuth } from './AuthProvider';
+import { useUser } from '@auth0/nextjs-auth0';
 import { LoginScreen } from './LoginScreen';
 
 interface AuthGuardProps {
@@ -9,7 +9,7 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, error, isLoading } = useUser();
 
   if (isLoading) {
     return (
@@ -19,7 +19,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
-  if (!isAuthenticated) {
+  // If there's an error or no user, show login screen
+  // Auth0 v4 sometimes returns "Unauthorized" errors instead of null user
+  if (error || !user) {
     return <LoginScreen />;
   }
 
