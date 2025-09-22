@@ -15,7 +15,6 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
   const { token } = useAuth();
   const {
     subscriptionStatus,
-    isLoading,
     isLoadingTrialStatus,
     fetchSubscriptionStatus,
     fetchSubscriptionPlans
@@ -68,7 +67,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
         return <SubscriptionStatus />;
       case 'trial_user':
         // User has a trial (could be active or expired)
-        if (subscriptionStatus.trial_expired) {
+        if (!subscriptionStatus.is_trial_active) {
           return <SubscriptionStatus />;
         }
         // Active trial users with access are handled above

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSubscriptionStore, useTrialActive, useHasSubscription, useCanAccessConversation } from '@/store/subscription-store';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { Button } from '@/components/ui/button';
@@ -16,8 +16,6 @@ export function SubscriptionStatus() {
     subscriptionPlans,
     isLoading,
     error,
-    fetchSubscriptionStatus,
-    fetchSubscriptionPlans,
     createUpgradeCheckout
   } = useSubscriptionStore();
   
@@ -204,11 +202,11 @@ export function SubscriptionStatus() {
                     ) : (
                       <span className="flex items-center">
                         <CheckCircle className="w-3 h-3 text-green-600 mr-1" />
-                        {plan.features.conversations_per_month} conversations/month
+                        {plan.features.conversations_per_month as number} conversations/month
                       </span>
                     )}
                     
-                    {plan.features.premium_features && (
+                    {plan.features.premium_features as boolean && (
                       <span className="flex items-center">
                         <CheckCircle className="w-3 h-3 text-green-600 mr-1" />
                         Premium features

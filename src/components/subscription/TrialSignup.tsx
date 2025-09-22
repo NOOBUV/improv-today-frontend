@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useSubscriptionStore } from '@/store/subscription-store';
@@ -12,12 +12,11 @@ import { CheckCircle, Clock, Zap } from 'lucide-react';
 export function TrialSignup() {
   const router = useRouter();
   const { token } = useAuth();
-  const { 
-    subscriptionPlans, 
-    isLoading, 
-    error, 
-    startTrial, 
-    fetchSubscriptionPlans,
+  const {
+    subscriptionPlans,
+    isLoading,
+    error,
+    startTrial,
     clearError
   } = useSubscriptionStore();
   
@@ -154,16 +153,16 @@ export function TrialSignup() {
                       ) : (
                         <div className="flex items-center text-sm text-gray-600">
                           <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
-                          {plan.features.conversations_per_month} conversations per month
+                          {plan.features.conversations_per_month as number} conversations per month
                         </div>
                       )}
                       
                       <div className="flex items-center text-sm text-gray-600">
                         <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
-                        {plan.features.trial_days} days free trial
+                        {plan.features.trial_days as number} days free trial
                       </div>
                       
-                      {plan.features.premium_features && (
+                      {plan.features.premium_features as boolean && (
                         <div className="flex items-center text-sm text-gray-600">
                           <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
                           Premium features

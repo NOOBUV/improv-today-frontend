@@ -12,7 +12,7 @@ export function useAdminAuth() {
 
     // Check user roles from JWT token claims first
     const userRoles = user['https://improvtoday.com/roles'] || [];
-    const hasAdminRole = userRoles.includes('admin');
+    const hasAdminRole = Array.isArray(userRoles) && userRoles.includes('admin');
     
     // Fallback to email-based admin check for development
     const adminEmails = [
@@ -26,13 +26,18 @@ export function useAdminAuth() {
 
     const isAdmin = hasAdminRole || isEmailAdmin;
 
-    return {
+    const result: AdminUser = {
       id: user.sub || '',
       email: user.email || '',
-      name: user.name || undefined,
       roles: isAdmin ? ['admin'] : ['user'],
       isAdmin,
     };
+
+    if (user.name) {
+      result.name = user.name;
+    }
+
+    return result;
   }, [user]);
 
   const checkAdminRole = () => {
