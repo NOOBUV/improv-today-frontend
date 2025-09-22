@@ -17,13 +17,6 @@ interface EmotionalBackdropProps {
   intensity?: number; // 0-1, default 0.6
 }
 
-interface MoodConfig {
-  primaryColor: string;
-  secondaryColor: string;
-  accentColor: string;
-  animationType: 'pulse' | 'flow' | 'wave' | 'static';
-  duration: number;
-}
 
 // Dedicated background gradient colors - separate from waveform colors
 // These are optimized for subtle background gradients that complement the waveform
@@ -76,72 +69,6 @@ const backgroundGradientConfigs: Record<EmotionalMood, BackgroundGradientColors>
   },
 };
 
-const moodConfigs: Record<EmotionalMood, MoodConfig> = {
-  neutral: {
-    // Clean warm neutral base - no distracting colors
-    primaryColor: '#f5f5f5', // Soft warm white
-    secondaryColor: '#e8e8e8', // Very light warm gray
-    accentColor: '#d0d0d0', // Light warm gray
-    animationType: 'flow', // Gentle breathing
-    duration: 12, // Calm breathing rhythm
-  },
-  happy: {
-    // Radiant golden sunrise - pure joy and energy
-    primaryColor: '#ff8f00', // Deep amber warmth
-    secondaryColor: '#ffc107', // Golden yellow light
-    accentColor: '#ffd93d', // Bright sunny highlight
-    animationType: 'pulse',
-    duration: 2.5, // Faster, more energetic
-  },
-  sad: {
-    // Deep ocean melancholy - sophisticated blues with depth
-    primaryColor: '#1565c0', // Deep ocean blue
-    secondaryColor: '#2196f3', // Clear sky blue
-    accentColor: '#4fc3f7', // Soft sky highlight
-    animationType: 'flow',
-    duration: 14, // Slower, more contemplative
-  },
-  angry: {
-    // Passionate fire - warm reds with energy, not harsh
-    primaryColor: '#c53030', // Rich burgundy
-    secondaryColor: '#e55353', // Warm passionate red
-    accentColor: '#ff6b6b', // Bright energetic red
-    animationType: 'pulse',
-    duration: 1.8, // Intense but controlled
-  },
-  excited: {
-    // Electric magenta energy - vibrant and alive
-    primaryColor: '#ad1457', // Deep fuchsia
-    secondaryColor: '#e91e63', // Vibrant magenta
-    accentColor: '#ff80ab', // Electric pink highlight
-    animationType: 'wave',
-    duration: 1.2, // High energy movement
-  },
-  calm: {
-    // Natural forest serenity - living greens
-    primaryColor: '#2e7d32', // Deep forest
-    secondaryColor: '#4caf50', // Natural green
-    accentColor: '#81c784', // Soft sage highlight
-    animationType: 'flow',
-    duration: 16, // Very peaceful rhythm
-  },
-  frustrated: {
-    // Warm ember glow - orange fire with warmth
-    primaryColor: '#f57c00', // Deep amber
-    secondaryColor: '#ff9800', // Bright orange
-    accentColor: '#ffab40', // Warm coral highlight
-    animationType: 'pulse',
-    duration: 2.2, // Restless energy
-  },
-  surprised: {
-    // Mystical violet burst - wonder and magic
-    primaryColor: '#6a1b9a', // Deep violet
-    secondaryColor: '#9c27b0', // Rich purple
-    accentColor: '#ba68c8', // Bright lavender
-    animationType: 'wave',
-    duration: 0.8, // Quick surprise burst
-  },
-};
 
 export function EmotionalBackdrop({
   mood,

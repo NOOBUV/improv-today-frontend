@@ -25,7 +25,7 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
   const speechRef = useRef<SimpleSpeech | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  const { isListening, isAISpeaking, isProcessing } = useAvaConversationState();
+  const { isListening, isAISpeaking } = useAvaConversationState();
   const { 
     isPaused,
     transcript,
