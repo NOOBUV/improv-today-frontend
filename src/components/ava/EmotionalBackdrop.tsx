@@ -1,7 +1,6 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState } from 'react';
 
 export type EmotionalMood = 
   | 'neutral' 
@@ -16,7 +15,6 @@ export type EmotionalMood =
 interface EmotionalBackdropProps {
   mood: EmotionalMood;
   intensity?: number; // 0-1, default 0.6
-  transition?: boolean; // Enable smooth transitions, default true
 }
 
 interface MoodConfig {
@@ -145,14 +143,12 @@ const moodConfigs: Record<EmotionalMood, MoodConfig> = {
   },
 };
 
-export function EmotionalBackdrop({ 
-  mood, 
-  intensity = 0.6, 
-  transition = true 
+export function EmotionalBackdrop({
+  mood,
+  intensity = 0.6
 }: EmotionalBackdropProps) {
   // Use mood prop directly for immediate updates
   const currentMood = mood;
-  const config = moodConfigs[currentMood] || moodConfigs.neutral;
   const backgroundColors = backgroundGradientConfigs[currentMood] || backgroundGradientConfigs.neutral;
 
   console.log('EmotionalBackdrop RENDER - mood prop:', mood, 'currentMood:', currentMood, 'backgroundColors:', backgroundColors);

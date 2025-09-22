@@ -9,6 +9,22 @@ import { useShallow } from 'zustand/react/shallow';
 
 export type Personality = 'sassy' | 'blunt' | 'friendly';
 
+export interface SimulationContext {
+  recent_events_count?: number;
+  global_mood?: number;
+  stress_level?: number;
+  selected_content_types?: string[];
+  conversation_emotion?: string;
+  emotion_reasoning?: string;
+}
+
+export interface PerformanceMetrics {
+  context_gathering_ms?: number;
+  response_generation_ms?: number;
+  total_response_time_ms?: number;
+  fallback_response_ms?: number;
+}
+
 export interface ConversationMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -16,6 +32,12 @@ export interface ConversationMessage {
   timestamp: Date;
   audioUrl?: string;
   feedback?: ConversationFeedback;
+  // Story 2.6 - Enhanced conversation context
+  simulation_context?: SimulationContext;
+  selected_backstory_types?: string[];
+  performance_metrics?: PerformanceMetrics;
+  enhanced_mode?: boolean;
+  fallback_mode?: boolean;
 }
 
 export interface ConversationFeedback {
@@ -54,11 +76,16 @@ export interface ConversationStore {
   transcript: string;
   interimTranscript: string;
   error: string | null;
-  
+
   // Data
   messages: ConversationMessage[];
   session: SessionData;
   currentSuggestion: VocabularySuggestion | null;
+
+  // Story 2.6 - Simulation context debugging
+  showSimulationDebug: boolean;
+  lastSimulationContext: SimulationContext | null;
+  lastPerformanceMetrics: PerformanceMetrics | null;
   
   // Simple actions
   setListening: (listening: boolean) => void;
@@ -93,6 +120,10 @@ export interface ConversationStore {
   startAISpeaking: () => void;
   stopAISpeaking: () => void;
   reset: () => void;
+
+  // Story 2.6 - Simulation context actions
+  setShowSimulationDebug: (show: boolean) => void;
+  updateSimulationContext: (context: SimulationContext | null, metrics: PerformanceMetrics | null) => void;
 }
 
 // ===== STORE IMPLEMENTATION =====
@@ -111,7 +142,12 @@ export const useConversationStore = create<ConversationStore>()(
       
       messages: [],
       currentSuggestion: null,
-      
+
+      // Story 2.6 - Simulation context state
+      showSimulationDebug: false,
+      lastSimulationContext: null,
+      lastPerformanceMetrics: null,
+
       session: {
         userName: '',
         selectedPersonality: 'friendly',
@@ -313,7 +349,7 @@ export const useConversationStore = create<ConversationStore>()(
           state.transcript = '';
           state.interimTranscript = '';
           state.error = null;
-          
+
           // Keep session data but clear messages and suggestions
           state.messages.forEach(message => {
             if (message.audioUrl) {
@@ -322,6 +358,24 @@ export const useConversationStore = create<ConversationStore>()(
           });
           state.messages = [];
           state.currentSuggestion = null;
+
+          // Story 2.6 - Clear simulation context data
+          state.lastSimulationContext = null;
+          state.lastPerformanceMetrics = null;
+        });
+      },
+
+      // Story 2.6 - Simulation context actions
+      setShowSimulationDebug: (show: boolean) => {
+        set((state) => {
+          state.showSimulationDebug = show;
+        });
+      },
+
+      updateSimulationContext: (context: SimulationContext | null, metrics: PerformanceMetrics | null) => {
+        set((state) => {
+          state.lastSimulationContext = context;
+          state.lastPerformanceMetrics = metrics;
         });
       },
     })),
