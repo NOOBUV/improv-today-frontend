@@ -1,7 +1,7 @@
 'use client';
 
 import { ApiTester } from '@/components/ApiTester';
-import { Auth } from '@/components/Auth';
+import { Auth } from '@/components/shared/Auth';
 
 export default function TestAuthPage() {
   return (

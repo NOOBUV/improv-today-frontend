@@ -38,39 +38,50 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [token, setToken] = useState<string | null>(null);
   const [tokenLoading, setTokenLoading] = useState(false);
 
+  // Stable token fetching function - no auth0User dependency
   const fetchAccessToken = useCallback(async () => {
-    if (!auth0User) {
-      setToken(null);
-      localStorage.removeItem('auth_token');
-      return;
-    }
-    
     setTokenLoading(true);
     try {
       const response = await fetch('/auth/token');
       if (response.ok) {
         const { accessToken } = await response.json();
+        console.log('AuthProvider: Token fetched successfully');
         setToken(accessToken);
-        localStorage.setItem('auth_token', accessToken);
+      } else if (response.status === 401) {
+        // User not authenticated - clear token but don't auto-logout
+        console.log('AuthProvider: Authentication required, clearing token');
+        setToken(null);
+      } else {
+        // Other errors - log but don't auto-logout
+        console.error('AuthProvider: Token fetch error:', response.status);
+        setToken(null);
       }
     } catch (error) {
-      console.error('Failed to fetch access token:', error);
+      console.error('AuthProvider: Failed to fetch access token:', error);
+      setToken(null);
     } finally {
       setTokenLoading(false);
     }
-  }, [auth0User]);
+  }, []); // No dependencies - stable function
 
+  // Only fetch token when auth0User changes
   useEffect(() => {
-    fetchAccessToken();
-  }, [fetchAccessToken]);
+    console.log('AuthProvider: useEffect triggered, auth0User:', !!auth0User);
+    if (auth0User) {
+      fetchAccessToken();
+    } else {
+      setToken(null);
+    }
+  }, [auth0User, fetchAccessToken]); // Include fetchAccessToken since it's stable now
 
   const refreshToken = useCallback(async () => {
-    await fetchAccessToken();
-  }, [fetchAccessToken]);
+    if (auth0User) {
+      await fetchAccessToken();
+    }
+  }, [auth0User, fetchAccessToken]); // Both are now stable
 
   const logout = () => {
     setToken(null);
-    localStorage.removeItem('auth_token');
     window.location.href = '/auth/logout';
   };
 

@@ -87,17 +87,53 @@ class ApiClient {
     personality?: string,
     sessionId?: number,
     lastAiReply?: string
-  ): Promise<ApiResponse<{ 
-    response: string; 
-    feedback?: unknown; 
-    suggestion?: { id: number; word: string; definition?: string };
-    used_suggestion_id?: number;
+  ): Promise<ApiResponse<{
+    response: string;
+    feedback?: unknown;
+    suggestion?: { id: string; word: string; definition: string; exampleSentence: string; remediationFeedback?: string };
+    used_suggestion_id?: number | string;
+    remediation_feedback?: string; // AC: 4 - Include remediation feedback from backend
+    simulation_context?: {
+      recent_events_count?: number;
+      global_mood?: number;
+      stress_level?: number;
+      selected_content_types?: string[];
+      conversation_emotion?: string;
+      emotion_reasoning?: string;
+    }; // Story 2.6 - Simulation context integration
+    selected_backstory_types?: string[]; // Story 2.6 - Backstory content used
+    performance_metrics?: {
+      context_gathering_ms?: number;
+      response_generation_ms?: number;
+      total_response_time_ms?: number;
+      fallback_response_ms?: number;
+    }; // Story 2.6 - Performance monitoring
+    enhanced_mode?: boolean; // Story 2.6 - Whether enhanced context was used
+    fallback_mode?: boolean; // Story 2.6 - Whether fallback was used
   }>> {
-    return this.request<{ 
-      response: string; 
-      feedback?: unknown; 
-      suggestion?: { id: number; word: string; definition?: string };
-      used_suggestion_id?: number;
+    return this.request<{
+      response: string;
+      feedback?: unknown;
+      suggestion?: { id: string; word: string; definition: string; exampleSentence: string; remediationFeedback?: string };
+      used_suggestion_id?: number | string;
+      remediation_feedback?: string; // AC: 4 - Include remediation feedback from backend
+      simulation_context?: {
+        recent_events_count?: number;
+        global_mood?: number;
+        stress_level?: number;
+        selected_content_types?: string[];
+        conversation_emotion?: string;
+        emotion_reasoning?: string;
+      }; // Story 2.6 - Simulation context integration
+      selected_backstory_types?: string[]; // Story 2.6 - Backstory content used
+      performance_metrics?: {
+        context_gathering_ms?: number;
+        response_generation_ms?: number;
+        total_response_time_ms?: number;
+        fallback_response_ms?: number;
+      }; // Story 2.6 - Performance monitoring
+      enhanced_mode?: boolean; // Story 2.6 - Whether enhanced context was used
+      fallback_mode?: boolean; // Story 2.6 - Whether fallback was used
     }>('/api/backend/conversation', {
       method: 'POST',
       body: JSON.stringify({ 

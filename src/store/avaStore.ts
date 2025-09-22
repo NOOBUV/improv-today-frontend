@@ -7,68 +7,27 @@ import { useShallow } from 'zustand/react/shallow';
 
 // ===== TYPES =====
 
-export type Personality = 'sassy' | 'blunt' | 'friendly';
+export type AvaPersonality = 'friendly' | 'sassy' | 'blunt';
 
-export interface SimulationContext {
-  recent_events_count?: number;
-  global_mood?: number;
-  stress_level?: number;
-  selected_content_types?: string[];
-  conversation_emotion?: string;
-  emotion_reasoning?: string;
-}
-
-export interface PerformanceMetrics {
-  context_gathering_ms?: number;
-  response_generation_ms?: number;
-  total_response_time_ms?: number;
-  fallback_response_ms?: number;
-}
-
-export interface ConversationMessage {
+export interface AvaMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  audioUrl?: string;
-  feedback?: ConversationFeedback;
-  // Story 2.6 - Enhanced conversation context
-  simulation_context?: SimulationContext;
-  selected_backstory_types?: string[];
-  performance_metrics?: PerformanceMetrics;
-  enhanced_mode?: boolean;
-  fallback_mode?: boolean;
 }
 
-export interface ConversationFeedback {
-  clarity: number; // 0-100
-  fluency: number; // 0-100
-  vocabularyUsage: string[];
-  suggestions: string[];
-  overallRating: number; // 0-5
-}
-
-export interface VocabularySuggestion {
-  id: number;
-  word: string;
-  definition: string;
-  exampleSentence: string;
-  remediationFeedback?: string; // AC: 5 - Optional remediation feedback for incorrect usage
-}
-
-export interface SessionData {
+export interface AvaSession {
   userName: string;
-  selectedPersonality: Personality;
+  selectedPersonality: AvaPersonality;
   conversationId?: string;
-  backendSessionId?: number | null;
   sessionDuration: number;
   sessionStartTime: number;
 }
 
 // ===== STORE INTERFACE =====
 
-export interface ConversationStore {
-  // State
+export interface AvaStore {
+  // Conversation state
   isListening: boolean;
   isAISpeaking: boolean;
   isProcessing: boolean;
@@ -76,16 +35,10 @@ export interface ConversationStore {
   transcript: string;
   interimTranscript: string;
   error: string | null;
-
+  
   // Data
-  messages: ConversationMessage[];
-  session: SessionData;
-  currentSuggestion: VocabularySuggestion | null;
-
-  // Story 2.6 - Simulation context debugging
-  showSimulationDebug: boolean;
-  lastSimulationContext: SimulationContext | null;
-  lastPerformanceMetrics: PerformanceMetrics | null;
+  messages: AvaMessage[];
+  session: AvaSession;
   
   // Simple actions
   setListening: (listening: boolean) => void;
@@ -97,20 +50,14 @@ export interface ConversationStore {
   setError: (error: string | null) => void;
   
   // Message actions
-  addMessage: (message: ConversationMessage) => void;
+  addMessage: (message: AvaMessage) => void;
   clearMessages: () => void;
   
   // Session actions
   setUserName: (name: string) => void;
-  setPersonality: (personality: Personality) => void;
+  setPersonality: (personality: AvaPersonality) => void;
   setConversationId: (id: string) => void;
-  setBackendSessionId: (id: number | null) => void;
   updateSessionDuration: () => void;
-  
-  // Suggestion actions
-  setSuggestion: (suggestion: VocabularySuggestion | null) => void;
-  clearSuggestion: (suggestionId?: number) => void;
-  updateSuggestionFeedback: (suggestionId: number, feedback: string) => void;
   
   // High-level actions
   startListening: () => void;
@@ -120,15 +67,11 @@ export interface ConversationStore {
   startAISpeaking: () => void;
   stopAISpeaking: () => void;
   reset: () => void;
-
-  // Story 2.6 - Simulation context actions
-  setShowSimulationDebug: (show: boolean) => void;
-  updateSimulationContext: (context: SimulationContext | null, metrics: PerformanceMetrics | null) => void;
 }
 
 // ===== STORE IMPLEMENTATION =====
 
-export const useConversationStore = create<ConversationStore>()(
+export const useAvaStore = create<AvaStore>()(
   devtools(
     immer((set, get) => ({
       // Initial state
@@ -141,17 +84,10 @@ export const useConversationStore = create<ConversationStore>()(
       error: null,
       
       messages: [],
-      currentSuggestion: null,
-
-      // Story 2.6 - Simulation context state
-      showSimulationDebug: false,
-      lastSimulationContext: null,
-      lastPerformanceMetrics: null,
-
+      
       session: {
         userName: '',
         selectedPersonality: 'friendly',
-        backendSessionId: null,
         sessionDuration: 0,
         sessionStartTime: Date.now(),
       },
@@ -227,7 +163,7 @@ export const useConversationStore = create<ConversationStore>()(
       },
       
       // Message actions
-      addMessage: (message: ConversationMessage) => {
+      addMessage: (message: AvaMessage) => {
         set((state) => {
           state.messages.push(message);
         });
@@ -235,12 +171,6 @@ export const useConversationStore = create<ConversationStore>()(
       
       clearMessages: () => {
         set((state) => {
-          // Clean up audio URLs
-          state.messages.forEach(message => {
-            if (message.audioUrl) {
-              URL.revokeObjectURL(message.audioUrl);
-            }
-          });
           state.messages = [];
         });
       },
@@ -252,7 +182,7 @@ export const useConversationStore = create<ConversationStore>()(
         });
       },
       
-      setPersonality: (personality: Personality) => {
+      setPersonality: (personality: AvaPersonality) => {
         set((state) => {
           state.session.selectedPersonality = personality;
         });
@@ -264,44 +194,12 @@ export const useConversationStore = create<ConversationStore>()(
         });
       },
       
-      setBackendSessionId: (id: number | null) => {
-        set((state) => {
-          state.session.backendSessionId = id;
-        });
-      },
-      
       updateSessionDuration: () => {
         set((state) => {
           if (state.session.sessionStartTime > 0) {
             state.session.sessionDuration = Math.floor(
               (Date.now() - state.session.sessionStartTime) / 1000
             );
-          }
-        });
-      },
-      
-      // Suggestion actions
-      setSuggestion: (suggestion: VocabularySuggestion | null) => {
-        set((state) => {
-          state.currentSuggestion = suggestion;
-        });
-      },
-      
-      clearSuggestion: (suggestionId?: number) => {
-        set((state) => {
-          // If specific ID provided, only clear if it matches current suggestion
-          if (suggestionId !== undefined && state.currentSuggestion?.id !== suggestionId) {
-            return; // Don't clear if IDs don't match
-          }
-          state.currentSuggestion = null;
-        });
-      },
-      
-      updateSuggestionFeedback: (suggestionId: number, feedback: string) => {
-        set((state) => {
-          // Only update if the feedback is for the current suggestion
-          if (state.currentSuggestion?.id === suggestionId) {
-            state.currentSuggestion.remediationFeedback = feedback;
           }
         });
       },
@@ -349,38 +247,14 @@ export const useConversationStore = create<ConversationStore>()(
           state.transcript = '';
           state.interimTranscript = '';
           state.error = null;
-
-          // Keep session data but clear messages and suggestions
-          state.messages.forEach(message => {
-            if (message.audioUrl) {
-              URL.revokeObjectURL(message.audioUrl);
-            }
-          });
+          
+          // Keep session data but clear messages
           state.messages = [];
-          state.currentSuggestion = null;
-
-          // Story 2.6 - Clear simulation context data
-          state.lastSimulationContext = null;
-          state.lastPerformanceMetrics = null;
-        });
-      },
-
-      // Story 2.6 - Simulation context actions
-      setShowSimulationDebug: (show: boolean) => {
-        set((state) => {
-          state.showSimulationDebug = show;
-        });
-      },
-
-      updateSimulationContext: (context: SimulationContext | null, metrics: PerformanceMetrics | null) => {
-        set((state) => {
-          state.lastSimulationContext = context;
-          state.lastPerformanceMetrics = metrics;
         });
       },
     })),
     {
-      name: 'conversation-store',
+      name: 'ava-store',
     }
   )
 );
@@ -388,7 +262,7 @@ export const useConversationStore = create<ConversationStore>()(
 // ===== SELECTORS =====
 
 // Object selectors using useShallow to prevent infinite loops
-export const useConversationState = () => useConversationStore(
+export const useAvaConversationState = () => useAvaStore(
   useShallow((state) => ({
     isListening: state.isListening,
     isAISpeaking: state.isAISpeaking,
@@ -398,7 +272,7 @@ export const useConversationState = () => useConversationStore(
   }))
 );
 
-export const useTranscriptState = () => useConversationStore(
+export const useAvaTranscriptState = () => useAvaStore(
   useShallow((state) => ({
     transcript: state.transcript,
     interimTranscript: state.interimTranscript,
@@ -406,11 +280,10 @@ export const useTranscriptState = () => useConversationStore(
 );
 
 // Primitive selectors don't need useShallow
-export const useSessionState = () => useConversationStore((state) => state.session);
-export const useMessages = () => useConversationStore((state) => state.messages);
-export const useCurrentSuggestion = () => useConversationStore((state) => state.currentSuggestion);
+export const useAvaSessionState = () => useAvaStore((state) => state.session);
+export const useAvaMessages = () => useAvaStore((state) => state.messages);
 
 // Status helpers
-export const useCanStartConversation = () => useConversationStore((state) => 
+export const useAvaCanStartConversation = () => useAvaStore((state) => 
   !state.isListening && !state.isAISpeaking && !state.isProcessing
 );

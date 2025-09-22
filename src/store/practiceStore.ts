@@ -9,22 +9,6 @@ import { useShallow } from 'zustand/react/shallow';
 
 export type Personality = 'sassy' | 'blunt' | 'friendly';
 
-export interface SimulationContext {
-  recent_events_count?: number;
-  global_mood?: number;
-  stress_level?: number;
-  selected_content_types?: string[];
-  conversation_emotion?: string;
-  emotion_reasoning?: string;
-}
-
-export interface PerformanceMetrics {
-  context_gathering_ms?: number;
-  response_generation_ms?: number;
-  total_response_time_ms?: number;
-  fallback_response_ms?: number;
-}
-
 export interface ConversationMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -32,12 +16,6 @@ export interface ConversationMessage {
   timestamp: Date;
   audioUrl?: string;
   feedback?: ConversationFeedback;
-  // Story 2.6 - Enhanced conversation context
-  simulation_context?: SimulationContext;
-  selected_backstory_types?: string[];
-  performance_metrics?: PerformanceMetrics;
-  enhanced_mode?: boolean;
-  fallback_mode?: boolean;
 }
 
 export interface ConversationFeedback {
@@ -67,7 +45,7 @@ export interface SessionData {
 
 // ===== STORE INTERFACE =====
 
-export interface ConversationStore {
+export interface PracticeStore {
   // State
   isListening: boolean;
   isAISpeaking: boolean;
@@ -76,16 +54,11 @@ export interface ConversationStore {
   transcript: string;
   interimTranscript: string;
   error: string | null;
-
+  
   // Data
   messages: ConversationMessage[];
   session: SessionData;
   currentSuggestion: VocabularySuggestion | null;
-
-  // Story 2.6 - Simulation context debugging
-  showSimulationDebug: boolean;
-  lastSimulationContext: SimulationContext | null;
-  lastPerformanceMetrics: PerformanceMetrics | null;
   
   // Simple actions
   setListening: (listening: boolean) => void;
@@ -120,15 +93,11 @@ export interface ConversationStore {
   startAISpeaking: () => void;
   stopAISpeaking: () => void;
   reset: () => void;
-
-  // Story 2.6 - Simulation context actions
-  setShowSimulationDebug: (show: boolean) => void;
-  updateSimulationContext: (context: SimulationContext | null, metrics: PerformanceMetrics | null) => void;
 }
 
 // ===== STORE IMPLEMENTATION =====
 
-export const useConversationStore = create<ConversationStore>()(
+export const usePracticeStore = create<PracticeStore>()(
   devtools(
     immer((set, get) => ({
       // Initial state
@@ -142,12 +111,7 @@ export const useConversationStore = create<ConversationStore>()(
       
       messages: [],
       currentSuggestion: null,
-
-      // Story 2.6 - Simulation context state
-      showSimulationDebug: false,
-      lastSimulationContext: null,
-      lastPerformanceMetrics: null,
-
+      
       session: {
         userName: '',
         selectedPersonality: 'friendly',
@@ -349,7 +313,7 @@ export const useConversationStore = create<ConversationStore>()(
           state.transcript = '';
           state.interimTranscript = '';
           state.error = null;
-
+          
           // Keep session data but clear messages and suggestions
           state.messages.forEach(message => {
             if (message.audioUrl) {
@@ -358,29 +322,11 @@ export const useConversationStore = create<ConversationStore>()(
           });
           state.messages = [];
           state.currentSuggestion = null;
-
-          // Story 2.6 - Clear simulation context data
-          state.lastSimulationContext = null;
-          state.lastPerformanceMetrics = null;
-        });
-      },
-
-      // Story 2.6 - Simulation context actions
-      setShowSimulationDebug: (show: boolean) => {
-        set((state) => {
-          state.showSimulationDebug = show;
-        });
-      },
-
-      updateSimulationContext: (context: SimulationContext | null, metrics: PerformanceMetrics | null) => {
-        set((state) => {
-          state.lastSimulationContext = context;
-          state.lastPerformanceMetrics = metrics;
         });
       },
     })),
     {
-      name: 'conversation-store',
+      name: 'practice-store',
     }
   )
 );
@@ -388,7 +334,7 @@ export const useConversationStore = create<ConversationStore>()(
 // ===== SELECTORS =====
 
 // Object selectors using useShallow to prevent infinite loops
-export const useConversationState = () => useConversationStore(
+export const usePracticeConversationState = () => usePracticeStore(
   useShallow((state) => ({
     isListening: state.isListening,
     isAISpeaking: state.isAISpeaking,
@@ -398,7 +344,7 @@ export const useConversationState = () => useConversationStore(
   }))
 );
 
-export const useTranscriptState = () => useConversationStore(
+export const usePracticeTranscriptState = () => usePracticeStore(
   useShallow((state) => ({
     transcript: state.transcript,
     interimTranscript: state.interimTranscript,
@@ -406,11 +352,11 @@ export const useTranscriptState = () => useConversationStore(
 );
 
 // Primitive selectors don't need useShallow
-export const useSessionState = () => useConversationStore((state) => state.session);
-export const useMessages = () => useConversationStore((state) => state.messages);
-export const useCurrentSuggestion = () => useConversationStore((state) => state.currentSuggestion);
+export const usePracticeSessionState = () => usePracticeStore((state) => state.session);
+export const usePracticeMessages = () => usePracticeStore((state) => state.messages);
+export const usePracticeCurrentSuggestion = () => usePracticeStore((state) => state.currentSuggestion);
 
 // Status helpers
-export const useCanStartConversation = () => useConversationStore((state) => 
+export const usePracticeCanStartConversation = () => usePracticeStore((state) => 
   !state.isListening && !state.isAISpeaking && !state.isProcessing
 );

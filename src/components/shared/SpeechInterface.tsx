@@ -1,24 +1,32 @@
 'use client';
 
-import { useEffect, useRef, useCallback, memo } from 'react';
+import { useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
 import { SimpleSpeech } from '@/lib/simpleSpeech';
-import { useConversationStore } from '@/store/conversationStore';
+import { 
+  useAvaStore,
+  useAvaConversationState
+} from '@/store/avaStore';
 import { config } from '@/lib/config';
 
 interface SpeechInterfaceProps {
   onTranscriptComplete: (transcript: string) => void;
   disabled?: boolean;
   aiResponse?: string; // When this changes, speak it and auto-restart listening
+  onAudioStream?: (stream: MediaStream | null) => void; // Callback to get audio stream for visualization
+  hidden?: boolean; // Hide the interface but keep it functional
 }
 
-export const SpeechInterface = memo(function SpeechInterface({ onTranscriptComplete, disabled = false, aiResponse }: SpeechInterfaceProps) {
+interface SpeechInterfaceRef {
+  handleToggle: () => void;
+}
+
+export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfaceProps>(function SpeechInterface({ onTranscriptComplete, disabled = false, aiResponse, onAudioStream, hidden = false }, ref) {
   const speechRef = useRef<SimpleSpeech | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  const {
-    isListening,
-    isAISpeaking,
+  const { isListening, isAISpeaking, isProcessing } = useAvaConversationState();
+  const { 
     isPaused,
     transcript,
     interimTranscript,
@@ -29,7 +37,7 @@ export const SpeechInterface = memo(function SpeechInterface({ onTranscriptCompl
     setTranscript,
     setError,
     clearTranscript,
-  } = useConversationStore();
+  } = useAvaStore();
 
   useEffect(() => {
     speechRef.current = new SimpleSpeech();
@@ -46,7 +54,10 @@ export const SpeechInterface = memo(function SpeechInterface({ onTranscriptCompl
     stopSilenceTimer();
     setListening(false);
     await speechRef.current?.stopListening();
-  }, [stopSilenceTimer, setListening]);
+    if (onAudioStream) {
+      onAudioStream(null);
+    }
+  }, [stopSilenceTimer, setListening, onAudioStream]);
 
   const handleFinalTranscript = useCallback(async (text: string) => {
     await stopListening();
@@ -67,6 +78,16 @@ export const SpeechInterface = memo(function SpeechInterface({ onTranscriptCompl
     setListening(true);
     
     try {
+      // Get audio stream for visualization
+      if (onAudioStream) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          onAudioStream(stream);
+        } catch (e) {
+          console.warn('Could not get audio stream for visualization:', e);
+        }
+      }
+      
       await speech.startListening(({ transcript: t, isFinal }) => {
         if (isFinal) {
           const finalText = t.trim();
@@ -84,8 +105,11 @@ export const SpeechInterface = memo(function SpeechInterface({ onTranscriptCompl
       const message = e instanceof Error ? e.message : 'Failed to start listening';
       setError(message);
       setListening(false);
+      if (onAudioStream) {
+        onAudioStream(null);
+      }
     }
-  }, [clearTranscript, setListening, setError, setTranscript, stopSilenceTimer, handleFinalTranscript]);
+  }, [clearTranscript, setListening, setError, setTranscript, stopSilenceTimer, handleFinalTranscript, onAudioStream]);
 
   // Handle AI response - speak it and auto-restart listening
   useEffect(() => {
@@ -133,6 +157,15 @@ export const SpeechInterface = memo(function SpeechInterface({ onTranscriptCompl
     return 'Tap to start';
   };
 
+  // Expose handleToggle to parent components
+  useImperativeHandle(ref, () => ({
+    handleToggle
+  }));
+
+  if (hidden) {
+    return null; // Hide the interface but keep all functionality
+  }
+
   return (
     <div className="flex flex-col items-center space-y-6">
       <Button 
@@ -154,4 +187,4 @@ export const SpeechInterface = memo(function SpeechInterface({ onTranscriptCompl
       </div>
     </div>
   );
-});
+}));
