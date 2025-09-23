@@ -91,7 +91,7 @@ export function JournalEntryList({ initialFilters = {} }: JournalEntryListProps)
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Journal Entries</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Manage Ava&apos;s daily journal entries for social media posting
+              Manage Clara&apos;s daily journal entries for social media posting
             </p>
           </div>
           <button

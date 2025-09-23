@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
 export default function Home() {
-  // Redirect root to conversation interface (Ava system)
+  // Redirect root to conversation interface (Clara system)
   redirect('/conversation');
 }

@@ -432,7 +432,7 @@ export function VoiceWaveform({ isListening = false, isSpeaking = false, audioSt
   // Determine current status for screen readers
   const getCurrentStatus = () => {
     if (isListening) return 'Voice input active, listening for speech'
-    if (isSpeaking) return 'Ava is speaking'
+    if (isSpeaking) return 'Clara is speaking'
     if (isProcessing) return 'Processing your request'
     return 'Voice interface ready, tap to start conversation'
   }
@@ -538,7 +538,7 @@ export function VoiceWaveform({ isListening = false, isSpeaking = false, audioSt
             aria-hidden="true" // Screen readers get status from button aria-label
           >
             {isListening ? 'Listening...' :
-             isSpeaking ? 'Ava Speaking...' :
+             isSpeaking ? 'Clara Speaking...' :
              isProcessing ? 'Thinking...' :
              'Tap to Talk'}
           </motion.span>

@@ -106,12 +106,12 @@ describe('ConversationPage', () => {
   describe('Basic Rendering', () => {
     it('renders without crashing', () => {
       render(<ConversationPage />)
-      expect(screen.getByText('Conversation with Ava')).toBeInTheDocument()
+      expect(screen.getByText('Conversation with Clara')).toBeInTheDocument()
     })
 
     it('renders header with session information', () => {
       render(<ConversationPage />)
-      expect(screen.getByText('Conversation with Ava')).toBeInTheDocument()
+      expect(screen.getByText('Conversation with Clara')).toBeInTheDocument()
       expect(screen.getByText('Personality: friendly • 0 messages')).toBeInTheDocument()
     })
 
@@ -157,7 +157,7 @@ describe('ConversationPage', () => {
   describe('API Integration', () => {
     it('handles successful API response', async () => {
       mockFetchResponse({
-        message: 'Hello from Ava!',
+        message: 'Hello from Clara!',
         emotional_state: { mood: 'happy' },
       })
 
@@ -187,7 +187,7 @@ describe('ConversationPage', () => {
         expect(mockAddMessage).toHaveBeenCalledWith(
           expect.objectContaining({
             role: 'assistant',
-            content: 'Hello from Ava!',
+            content: 'Hello from Clara!',
           })
         )
       })
@@ -358,7 +358,7 @@ describe('ConversationPage', () => {
         {
           id: '1',
           role: 'assistant',
-          content: 'Hello from Ava!',
+          content: 'Hello from Clara!',
           timestamp: new Date(),
         },
       ])
@@ -366,7 +366,7 @@ describe('ConversationPage', () => {
       render(<ConversationPage />)
 
       const aiResponse = screen.getByTestId('ai-response')
-      expect(aiResponse).toHaveTextContent('Hello from Ava!')
+      expect(aiResponse).toHaveTextContent('Hello from Clara!')
     })
   })
 
@@ -495,11 +495,11 @@ describe('ConversationPage', () => {
     it('maintains state consistency during re-renders', () => {
       const { rerender } = render(<ConversationPage />)
 
-      expect(screen.getByText('Conversation with Ava')).toBeInTheDocument()
+      expect(screen.getByText('Conversation with Clara')).toBeInTheDocument()
 
       rerender(<ConversationPage />)
 
-      expect(screen.getByText('Conversation with Ava')).toBeInTheDocument()
+      expect(screen.getByText('Conversation with Clara')).toBeInTheDocument()
     })
   })
 
@@ -507,7 +507,7 @@ describe('ConversationPage', () => {
     it('has proper heading structure', () => {
       render(<ConversationPage />)
       const heading = screen.getByRole('heading', { level: 1 })
-      expect(heading).toHaveTextContent('Conversation with Ava')
+      expect(heading).toHaveTextContent('Conversation with Clara')
     })
 
     it('provides descriptive status information', () => {

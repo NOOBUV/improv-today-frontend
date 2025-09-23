@@ -46,9 +46,9 @@ describe('VoiceWaveform', () => {
       expect(screen.getByText('Listening...')).toBeInTheDocument()
     })
 
-    it('shows "Ava Speaking..." when isSpeaking is true', () => {
+    it('shows "Clara Speaking..." when isSpeaking is true', () => {
       render(<VoiceWaveform {...defaultProps} isSpeaking={true} />)
-      expect(screen.getByText('Ava Speaking...')).toBeInTheDocument()
+      expect(screen.getByText('Clara Speaking...')).toBeInTheDocument()
     })
 
     it('shows "Thinking..." when isProcessing is true', () => {
@@ -195,7 +195,7 @@ describe('VoiceWaveform', () => {
       expect(screen.getByText('Listening...')).toBeInTheDocument()
 
       rerender(<VoiceWaveform {...defaultProps} isSpeaking={true} />)
-      expect(screen.getByText('Ava Speaking...')).toBeInTheDocument()
+      expect(screen.getByText('Clara Speaking...')).toBeInTheDocument()
     })
 
     it('provides keyboard accessibility', () => {

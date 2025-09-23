@@ -1,16 +1,16 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { 
-  useAvaStore,
-  useAvaConversationState,
-  useAvaMessages,
-  useAvaSessionState
-} from '@/store/avaStore';
+import {
+  useClaraStore,
+  useClaraConversationState,
+  useClaraMessages,
+  useClaraSessionState
+} from '@/store/claraStore';
 import { useShallow } from 'zustand/react/shallow';
 import { SpeechInterface } from '@/components/shared/SpeechInterface';
-import { EmotionalBackdrop, type EmotionalMood } from '@/components/ava/EmotionalBackdrop';
-import { VoiceWaveform } from '@/components/ava/VoiceWaveform';
+import { EmotionalBackdrop, type EmotionalMood } from '@/components/clara/EmotionalBackdrop';
+import { VoiceWaveform } from '@/components/clara/VoiceWaveform';
 import { Auth } from '@/components/shared/Auth';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
@@ -18,12 +18,12 @@ import Link from 'next/link';
 
 export default function ConversationPage() {
   // Use selective hooks consistently
-  const { isProcessing, isListening, isAISpeaking } = useAvaConversationState();
-  const session = useAvaSessionState();
-  const messages = useAvaMessages();
+  const { isProcessing, isListening, isAISpeaking } = useClaraConversationState();
+  const session = useClaraSessionState();
+  const messages = useClaraMessages();
   const { token, isAuthenticated } = useAuth();
   const { isAdmin } = useAdminAuth();
-  const { addMessage, setProcessing, setUserName, setPersonality } = useAvaStore(
+  const { addMessage, setProcessing, setUserName, setPersonality } = useClaraStore(
     useShallow((state) => ({
       addMessage: state.addMessage,
       setProcessing: state.setProcessing,
@@ -119,7 +119,7 @@ export default function ConversationPage() {
       }
 
       // Make API call to backend
-      const response = await fetch('/api/backend/ava/conversation', {
+      const response = await fetch('/api/backend/clara/conversation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,7 +167,7 @@ export default function ConversationPage() {
         console.log('setCurrentMood called with:', mappedMood);
       }
       
-      // Add Ava's response to chat
+      // Add Clara's response to chat
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant' as const,
@@ -247,7 +247,7 @@ export default function ConversationPage() {
             <div className="flex items-center gap-6">
               <div>
                 <h1 className="text-2xl font-bold text-white" id="main-heading">
-                  Conversation with Ava
+                  Conversation with Clara
                 </h1>
                 <p className="text-white/70 text-sm mt-1" aria-live="polite">
                   Personality: {session.selectedPersonality} • {messages.length} messages
@@ -301,7 +301,7 @@ export default function ConversationPage() {
           {/* Hidden instructions for screen readers */}
           <div className="sr-only" id="voice-instructions">
             Use the central circle to start voice interaction. Press Ctrl+Space or use the interface controls.
-            Current status: {isListening ? 'listening' : isAISpeaking ? 'Ava speaking' : isProcessing ? 'processing' : 'ready'}
+            Current status: {isListening ? 'listening' : isAISpeaking ? 'Clara speaking' : isProcessing ? 'processing' : 'ready'}
           </div>
         </main>
 

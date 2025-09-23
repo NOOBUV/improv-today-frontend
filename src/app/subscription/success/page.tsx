@@ -57,7 +57,7 @@ export default function SubscriptionSuccessPage() {
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <h3 className="font-semibold text-green-900 mb-2">What&apos;s next?</h3>
               <ul className="text-sm text-green-800 space-y-1">
-                <li>• Start practicing conversations with Ava</li>
+                <li>• Start practicing conversations with Clara</li>
                 <li>• Get personalized feedback on your English</li>
                 <li>• Track your progress over time</li>
                 <li>• Access all premium features</li>

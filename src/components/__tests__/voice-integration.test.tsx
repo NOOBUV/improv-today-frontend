@@ -77,7 +77,7 @@ jest.mock('@/components/SpeechInterface', () => ({
         } else {
           // Start listening
           setIsListening(true)
-          setCurrentTranscript('Hello Ava, how are you today?')
+          setCurrentTranscript('Hello Clara, how are you today?')
           // Simulate audio stream
           if (onAudioStream) {
             onAudioStream(new MediaStream())
@@ -146,7 +146,7 @@ describe('Voice Integration Tests', () => {
 
           try {
             // Simulate API call
-            const response = await fetch('/api/backend/ava/conversation', {
+            const response = await fetch('/api/backend/clara/conversation', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ message: transcript }),
@@ -218,7 +218,7 @@ describe('Voice Integration Tests', () => {
         expect(mockStore.addMessage).toHaveBeenCalledWith(
           expect.objectContaining({
             role: 'user',
-            content: 'Hello Ava, how are you today?',
+            content: 'Hello Clara, how are you today?',
           })
         )
       })
@@ -252,7 +252,7 @@ describe('Voice Integration Tests', () => {
           mockStore.setProcessing(true)
 
           try {
-            await fetch('/api/backend/ava/conversation', {
+            await fetch('/api/backend/clara/conversation', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ message: transcript }),

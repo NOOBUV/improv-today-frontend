@@ -3,10 +3,10 @@
 import { useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
 import { SimpleSpeech } from '@/lib/simpleSpeech';
-import { 
-  useAvaStore,
-  useAvaConversationState
-} from '@/store/avaStore';
+import {
+  useClaraStore,
+  useClaraConversationState
+} from '@/store/claraStore';
 import { config } from '@/lib/config';
 
 interface SpeechInterfaceProps {
@@ -25,7 +25,7 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
   const speechRef = useRef<SimpleSpeech | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  const { isListening, isAISpeaking } = useAvaConversationState();
+  const { isListening, isAISpeaking } = useClaraConversationState();
   const { 
     isPaused,
     transcript,
@@ -37,7 +37,7 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
     setTranscript,
     setError,
     clearTranscript,
-  } = useAvaStore();
+  } = useClaraStore();
 
   useEffect(() => {
     speechRef.current = new SimpleSpeech();

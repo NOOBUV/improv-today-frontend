@@ -7,18 +7,18 @@ import { useShallow } from 'zustand/react/shallow';
 
 // ===== TYPES =====
 
-export type AvaPersonality = 'friendly' | 'sassy' | 'blunt';
+export type ClaraPersonality = 'friendly' | 'sassy' | 'blunt';
 
-export interface AvaMessage {
+export interface ClaraMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
 }
 
-export interface AvaSession {
+export interface ClaraSession {
   userName: string;
-  selectedPersonality: AvaPersonality;
+  selectedPersonality: ClaraPersonality;
   conversationId?: string;
   sessionDuration: number;
   sessionStartTime: number;
@@ -26,7 +26,7 @@ export interface AvaSession {
 
 // ===== STORE INTERFACE =====
 
-export interface AvaStore {
+export interface ClaraStore {
   // Conversation state
   isListening: boolean;
   isAISpeaking: boolean;
@@ -37,8 +37,8 @@ export interface AvaStore {
   error: string | null;
   
   // Data
-  messages: AvaMessage[];
-  session: AvaSession;
+  messages: ClaraMessage[];
+  session: ClaraSession;
   
   // Simple actions
   setListening: (listening: boolean) => void;
@@ -50,12 +50,12 @@ export interface AvaStore {
   setError: (error: string | null) => void;
   
   // Message actions
-  addMessage: (message: AvaMessage) => void;
+  addMessage: (message: ClaraMessage) => void;
   clearMessages: () => void;
   
   // Session actions
   setUserName: (name: string) => void;
-  setPersonality: (personality: AvaPersonality) => void;
+  setPersonality: (personality: ClaraPersonality) => void;
   setConversationId: (id: string) => void;
   updateSessionDuration: () => void;
   
@@ -71,7 +71,7 @@ export interface AvaStore {
 
 // ===== STORE IMPLEMENTATION =====
 
-export const useAvaStore = create<AvaStore>()(
+export const useClaraStore = create<ClaraStore>()(
   devtools(
     immer((set, get) => ({
       // Initial state
@@ -163,7 +163,7 @@ export const useAvaStore = create<AvaStore>()(
       },
       
       // Message actions
-      addMessage: (message: AvaMessage) => {
+      addMessage: (message: ClaraMessage) => {
         set((state) => {
           state.messages.push(message);
         });
@@ -182,7 +182,7 @@ export const useAvaStore = create<AvaStore>()(
         });
       },
       
-      setPersonality: (personality: AvaPersonality) => {
+      setPersonality: (personality: ClaraPersonality) => {
         set((state) => {
           state.session.selectedPersonality = personality;
         });
@@ -254,7 +254,7 @@ export const useAvaStore = create<AvaStore>()(
       },
     })),
     {
-      name: 'ava-store',
+      name: 'clara-store',
     }
   )
 );
@@ -262,7 +262,7 @@ export const useAvaStore = create<AvaStore>()(
 // ===== SELECTORS =====
 
 // Object selectors using useShallow to prevent infinite loops
-export const useAvaConversationState = () => useAvaStore(
+export const useClaraConversationState = () => useClaraStore(
   useShallow((state) => ({
     isListening: state.isListening,
     isAISpeaking: state.isAISpeaking,
@@ -272,7 +272,7 @@ export const useAvaConversationState = () => useAvaStore(
   }))
 );
 
-export const useAvaTranscriptState = () => useAvaStore(
+export const useClaraTranscriptState = () => useClaraStore(
   useShallow((state) => ({
     transcript: state.transcript,
     interimTranscript: state.interimTranscript,
@@ -280,10 +280,10 @@ export const useAvaTranscriptState = () => useAvaStore(
 );
 
 // Primitive selectors don't need useShallow
-export const useAvaSessionState = () => useAvaStore((state) => state.session);
-export const useAvaMessages = () => useAvaStore((state) => state.messages);
+export const useClaraSessionState = () => useClaraStore((state) => state.session);
+export const useClaraMessages = () => useClaraStore((state) => state.messages);
 
 // Status helpers
-export const useAvaCanStartConversation = () => useAvaStore((state) => 
+export const useClaraCanStartConversation = () => useClaraStore((state) => 
   !state.isListening && !state.isAISpeaking && !state.isProcessing
 );

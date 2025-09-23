@@ -101,7 +101,7 @@ export function SubscriptionStatus() {
                   ? `You have an active ${subscriptionStatus.subscription_status} subscription`
                   : isTrialActive && subscriptionStatus.days_remaining !== null
                   ? `${subscriptionStatus.days_remaining} days remaining in your trial`
-                  : 'Your trial has ended. Upgrade to continue using Ava.'
+                  : 'Your trial has ended. Upgrade to continue using Clara.'
                 }
               </CardDescription>
             </div>
@@ -143,7 +143,7 @@ export function SubscriptionStatus() {
             </CardTitle>
             <CardDescription>
               {isTrialActive 
-                ? 'Upgrade now to ensure uninterrupted access to Ava'
+                ? 'Upgrade now to ensure uninterrupted access to Clara'
                 : 'Subscribe to regain access to conversation practice'
               }
             </CardDescription>

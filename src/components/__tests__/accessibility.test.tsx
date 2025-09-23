@@ -53,7 +53,7 @@ describe('Accessibility Features', () => {
 
       rerender(<VoiceWaveform {...defaultProps} isSpeaking={true} />)
       button = screen.getByRole('button')
-      expect(button).toHaveAttribute('aria-label', /ava is speaking/i)
+      expect(button).toHaveAttribute('aria-label', /clara is speaking/i)
     })
 
     it('includes ARIA live region for status updates', () => {
@@ -73,7 +73,7 @@ describe('Accessibility Features', () => {
       expect(screen.getByText(/voice input active, listening/i)).toBeInTheDocument()
 
       rerender(<VoiceWaveform {...defaultProps} isSpeaking={true} />)
-      expect(screen.getByText(/ava is speaking/i)).toBeInTheDocument()
+      expect(screen.getByText(/clara is speaking/i)).toBeInTheDocument()
     })
 
     it('hides decorative elements from screen readers', () => {
@@ -157,7 +157,7 @@ describe('Accessibility Features', () => {
       const MockConversationPage = () => (
         <div>
           <header role="banner">
-            <h1>Conversation with Ava</h1>
+            <h1>Conversation with Clara</h1>
           </header>
           <main role="main" aria-labelledby="main-heading">
             <div id="main-heading">Main Content</div>
@@ -169,7 +169,7 @@ describe('Accessibility Features', () => {
 
       expect(screen.getByRole('banner')).toBeInTheDocument()
       expect(screen.getByRole('main')).toBeInTheDocument()
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Conversation with Ava')
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Conversation with Clara')
     })
 
     it('provides status updates for screen readers', () => {
@@ -254,7 +254,7 @@ describe('Accessibility Features', () => {
             Voice Control
           </button>
           <div id="status-description" className="sr-only">
-            Use this button to start voice interaction with Ava
+            Use this button to start voice interaction with Clara
           </div>
         </div>
       )
