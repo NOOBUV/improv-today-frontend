@@ -127,7 +127,7 @@ export default function ConversationPage() {
         },
         body: JSON.stringify({
           message: transcript,
-          personality: session.selectedPersonality,
+          session_id: session.sessionId,
         }),
       });
 

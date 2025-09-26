@@ -20,6 +20,7 @@ export interface ClaraSession {
   userName: string;
   selectedPersonality: ClaraPersonality;
   conversationId?: string;
+  sessionId: number; // For conversation tracking
   sessionDuration: number;
   sessionStartTime: number;
 }
@@ -88,6 +89,7 @@ export const useClaraStore = create<ClaraStore>()(
       session: {
         userName: '',
         selectedPersonality: 'friendly',
+        sessionId: Math.floor(Math.random() * 1000000), // Generate unique session ID
         sessionDuration: 0,
         sessionStartTime: Date.now(),
       },
