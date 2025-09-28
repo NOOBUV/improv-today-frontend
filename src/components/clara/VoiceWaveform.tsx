@@ -11,6 +11,7 @@ interface VoiceWaveformProps {
   onCentralCircleClick?: () => void;
   disabled?: boolean;
   emotionalMood?: 'neutral' | 'happy' | 'sad' | 'angry' | 'excited' | 'calm' | 'surprised' | 'frustrated';
+  conversationIntensity?: 'low' | 'medium' | 'high';
 }
 
 interface Particle {
