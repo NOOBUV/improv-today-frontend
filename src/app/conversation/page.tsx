@@ -41,11 +41,11 @@ export default function ConversationPage() {
     }))
   );
   
-  const [currentMood, setCurrentMood] = useState<EmotionalMood>('happy');
+  const [currentMood] = useState<EmotionalMood>('happy');
   const [lastSpokenMessageId, setLastSpokenMessageId] = useState<string>('');
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
   const [conversationIntensity, setConversationIntensity] = useState<'low' | 'medium' | 'high'>('low');
-  const [lastApiMoodUpdate, setLastApiMoodUpdate] = useState<number>(0);
+  const [lastApiMoodUpdate] = useState<number>(0);
   const [heartbeatConfig] = useState<HeartbeatConfiguration>({
     enabled: true,
     audioEnabled: true,
@@ -62,13 +62,12 @@ export default function ConversationPage() {
   // Initialize sentiment analysis hook
   const {
     analyzeSentiment,
-    getCurrentIntensityLevel,
-    updateUIState
+    getCurrentIntensityLevel
   } = useSentimentAnalysis();
 
   // Streaming conversation state
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingResponse, setStreamingResponse] = useState('');
+  const [, setIsStreaming] = useState(false);
+  const [, setStreamingResponse] = useState('');
 
   // Progressive speech state
   const [speechQueue, setSpeechQueue] = useState<string[]>([]);
