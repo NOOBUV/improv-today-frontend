@@ -21,6 +21,7 @@ import { HeartbeatAudio } from '@/components/clara/HeartbeatAudio';
 import { HeartbeatControls } from '@/components/clara/HeartbeatControls';
 import { type HeartbeatConfiguration } from '@/components/clara/HeartbeatConfig';
 import { getPerformanceMonitor } from '@/lib/heartbeat-performance';
+import { config } from '@/lib/config';
 import Link from 'next/link';
 
 export default function ConversationPage() {
@@ -30,12 +31,13 @@ export default function ConversationPage() {
   const messages = useClaraMessages();
   const { token, isAuthenticated } = useAuth();
   const { isAdmin } = useAdminAuth();
-  const { addMessage, setProcessing, setUserName, setPersonality } = useClaraStore(
+  const { addMessage, setProcessing, setUserName, setPersonality, setAISpeaking } = useClaraStore(
     useShallow((state) => ({
       addMessage: state.addMessage,
       setProcessing: state.setProcessing,
       setUserName: state.setUserName,
       setPersonality: state.setPersonality,
+      setAISpeaking: state.setAISpeaking,
     }))
   );
   
@@ -48,7 +50,7 @@ export default function ConversationPage() {
     enabled: true,
     audioEnabled: true,
     visualEnabled: true,
-    volume: 0.7,
+    volume: 0.3,
     intensity: 1.0,
     reducedMotion: false
   });
@@ -63,6 +65,145 @@ export default function ConversationPage() {
     getCurrentIntensityLevel,
     updateUIState
   } = useSentimentAnalysis();
+
+  // Streaming conversation state
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingResponse, setStreamingResponse] = useState('');
+
+  // Progressive speech state
+  const [speechQueue, setSpeechQueue] = useState<string[]>([]);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const speechSynthRef = useRef<SpeechSynthesis | null>(null);
+  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const spokenTextRef = useRef<string>('');
+  const speechCompletedRef = useRef<boolean>(false);
+  const totalSpeechSegmentsRef = useRef<number>(0);
+
+
+  // Initialize speech synthesis with Clara's voice
+  const [claraVoice, setClaraVoice] = useState<SpeechSynthesisVoice | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      speechSynthRef.current = window.speechSynthesis;
+
+      // Load Clara's preferred voice (same logic as BrowserSpeechService)
+      const loadClaraVoice = () => {
+        const voices = speechSynthRef.current?.getVoices() || [];
+        if (voices.length === 0) return;
+
+        // Priority 1: Google UK English Female (Clara's preferred voice)
+        const googleUKFemale = voices.find(voice =>
+          voice.name === 'Google UK English Female' ||
+          (voice.name.toLowerCase().includes('google') &&
+           voice.name.toLowerCase().includes('uk') &&
+           voice.name.toLowerCase().includes('female'))
+        );
+
+        if (googleUKFemale) {
+          setClaraVoice(googleUKFemale);
+          return;
+        }
+
+        // Priority 2: Any UK English voices
+        const ukVoices = voices.filter(voice =>
+          voice.lang.toLowerCase() === 'en-gb' ||
+          voice.lang.toLowerCase() === 'en_gb'
+        );
+
+        if (ukVoices.length > 0) {
+          const qualityUkVoice = ukVoices.find(voice => {
+            const voiceName = voice.name.toLowerCase();
+            return ['google', 'microsoft', 'natural', 'neural', 'premium'].some(indicator =>
+              voiceName.includes(indicator)
+            );
+          });
+          setClaraVoice(qualityUkVoice || ukVoices[0]);
+          return;
+        }
+
+        // Priority 3: Default English voice
+        const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
+        setClaraVoice(englishVoices[0] || null);
+      };
+
+      // Load voices
+      if (speechSynthRef.current.getVoices().length > 0) {
+        loadClaraVoice();
+      } else {
+        speechSynthRef.current.onvoiceschanged = loadClaraVoice;
+      }
+    }
+  }, []);
+
+  // Progressive speech processing
+  useEffect(() => {
+    if (speechQueue.length > 0 && !isSpeaking && speechSynthRef.current) {
+      const nextText = speechQueue[0];
+      setSpeechQueue(prev => prev.slice(1));
+
+      const utterance = new SpeechSynthesisUtterance(nextText);
+      utterance.voice = claraVoice; // Use Clara's preferred voice
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+
+      utterance.onstart = () => {
+        console.log('🎤 SPEECH STARTED at', new Date().toISOString(), ':', nextText);
+        setIsSpeaking(true);
+        // Use setTimeout to avoid setState during render
+        setTimeout(() => setAISpeaking(true), 0);
+        currentUtteranceRef.current = utterance;
+      };
+
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        currentUtteranceRef.current = null;
+        totalSpeechSegmentsRef.current -= 1;
+
+        // Only proceed with final cleanup when all speech segments are complete
+        setTimeout(() => {
+          setSpeechQueue(currentQueue => {
+            // Only trigger auto-listening when both queue is empty AND all expected segments are done
+            if (currentQueue.length === 0 && totalSpeechSegmentsRef.current <= 0 && !speechCompletedRef.current) {
+              speechCompletedRef.current = true;
+
+              // Use setTimeout to avoid setState during render
+              setTimeout(() => setAISpeaking(false), 0);
+
+              // Auto-start listening after Clara finishes speaking (ONLY ONCE)
+              setTimeout(() => {
+                setTimeout(() => {
+                  if (speechInterfaceRef.current?.handleToggle) {
+                    speechInterfaceRef.current.handleToggle();
+                  }
+                }, 0);
+              }, config.aiSpeech.autoStartListeningDelay);
+            }
+            return currentQueue;
+          });
+        }, 100);
+      };
+
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        // Use setTimeout to avoid setState during render
+        setTimeout(() => setAISpeaking(false), 0);
+        currentUtteranceRef.current = null;
+      };
+
+      speechSynthRef.current.speak(utterance);
+    }
+  }, [speechQueue, isSpeaking]);
+
+  // Function to add text to speech queue
+  const queueSpeech = (text: string) => {
+    if (text.trim()) {
+      setSpeechQueue(prev => [...prev, text.trim()]);
+      totalSpeechSegmentsRef.current += 1;
+      speechCompletedRef.current = false;
+    }
+  };
 
   // Initialize performance monitoring
   useEffect(() => {
@@ -187,6 +328,18 @@ export default function ConversationPage() {
     if (!transcript.trim()) return;
 
     setProcessing(true);
+    setIsStreaming(true);
+    setStreamingResponse('');
+
+    // Clear any existing speech queue for new conversation
+    setSpeechQueue([]);
+    spokenTextRef.current = '';
+    speechCompletedRef.current = false;
+    totalSpeechSegmentsRef.current = 0;
+    if (speechSynthRef.current) {
+      speechSynthRef.current.cancel();
+    }
+    setIsSpeaking(false);
 
     // Add user message to chat
     const userMessage = {
@@ -204,15 +357,15 @@ export default function ConversationPage() {
     const currentMessages = [...messages, userMessage];
     const intensityLevel = getCurrentIntensityLevel(currentMessages);
     setConversationIntensity(intensityLevel.level);
-    
+
     try {
       // Check if user is authenticated
       if (!isAuthenticated || !token) {
         throw new Error('Authentication required');
       }
 
-      // Make API call to backend
-      const response = await fetch('/api/backend/clara/conversation', {
+      // Use Clara's streaming endpoint
+      const response = await fetch('/api/backend/clara/conversation/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -221,6 +374,7 @@ export default function ConversationPage() {
         body: JSON.stringify({
           message: transcript,
           session_id: session.sessionId,
+          personality: session.selectedPersonality,
         }),
       });
 
@@ -231,56 +385,102 @@ export default function ConversationPage() {
         throw new Error(`API error: ${response.status}`);
       }
 
-      const data = await response.json();
+      // Handle streaming response with proper SSE parsing for Clara's format
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulatedResponse = '';
+      let finalData: any = null;
 
-      // Update emotional backdrop based on API response
-      // Check for mood in nested emotional_state object or at top level
-      const emotion = data.emotional_state?.mood || data.emotion || data.mood;
-      if (emotion) {
-        const moodMapping: Record<string, EmotionalMood> = {
-          'happy': 'happy',
-          'joy': 'happy',
-          'excited': 'excited',
-          'sad': 'sad',
-          'melancholy': 'sad',
-          'angry': 'angry',
-          'frustrated': 'frustrated',
-          'calm': 'calm',
-          'peaceful': 'calm',
-          'surprised': 'surprised',
-          'shock': 'surprised',
-          'neutral': 'neutral',
-        };
-        const mappedMood = moodMapping[emotion.toLowerCase()] || 'neutral';
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-        // Cache the API mood update with timestamp for smooth transitions
-        const now = Date.now();
-        moodTransitionCacheRef.current.set('api_mood', { mood: mappedMood, timestamp: now });
-        setLastApiMoodUpdate(now);
-        setCurrentMood(mappedMood);
+        // Decode the chunk and add to buffer
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE messages
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            // Skip event type line
+            continue;
+          }
+
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') break;
+
+            try {
+              const eventData = JSON.parse(data);
+
+              // Handle consciousness chunks for progressive display and speech
+              if (eventData.chunk) {
+                console.log('📦 CHUNK RECEIVED at', new Date().toISOString(), ':', eventData.chunk);
+                accumulatedResponse += eventData.chunk;
+                setStreamingResponse(accumulatedResponse);
+
+                // Queue chunks for progressive speech
+                // Find new text that hasn't been spoken yet
+                const newText = accumulatedResponse.substring(spokenTextRef.current.length);
+
+                // Look for sentence/phrase boundaries in new text
+                if (newText.includes('.') || newText.includes('!') || newText.includes('?') ||
+                    (newText.includes(',') && newText.length > 10) || newText.length > 30) {
+
+                  // Find complete sentences/phrases to speak
+                  const sentences = accumulatedResponse.match(/[^.!?]*[.!?]/g) || [];
+                  const spokenSentences = spokenTextRef.current.match(/[^.!?]*[.!?]/g) || [];
+
+                  // Get new sentences that haven't been spoken
+                  const newSentences = sentences.slice(spokenSentences.length);
+
+                  if (newSentences.length > 0) {
+                    const textToSpeak = newSentences[0].trim();
+                    if (textToSpeak.length > 3) {
+                      console.log('🗣️ QUEUING SPEECH at', new Date().toISOString(), ':', textToSpeak);
+                      queueSpeech(textToSpeak);
+                      spokenTextRef.current += newSentences[0];
+                    }
+                  }
+                }
+              }
+
+              // Handle complete response
+              if (eventData.response) {
+                console.log('✅ COMPLETE RESPONSE at', new Date().toISOString());
+                finalData = eventData;
+              }
+            } catch (e) {
+              console.error('Error parsing SSE data:', e);
+            }
+          }
+        }
       }
-      
+
+      // Use final complete response or accumulated response
+      const finalResponse = finalData?.response || accumulatedResponse || 'Sorry, I didn\'t get a response.';
+
       // Add Clara's response to chat
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant' as const,
-        content: data.message || data.text_response || 'Sorry, I didn\'t get a response.',
+        content: finalResponse,
         timestamp: new Date(),
       };
       addMessage(assistantMessage);
 
-      // Perform sentiment analysis on assistant response and update UI state
-      const assistantSentiment = analyzeSentiment(assistantMessage.content);
-      const updatedMessages = [...currentMessages, assistantMessage];
-      const finalIntensityLevel = updateUIState(assistantSentiment, updatedMessages);
-      setConversationIntensity(finalIntensityLevel.level);
+      // Queue any remaining unsaid text for speech
+      const remainingText = finalResponse.substring(spokenTextRef.current.length).trim();
+      if (remainingText && remainingText.length > 3) {
+        queueSpeech(remainingText);
+      }
 
-      // Mark this message for speaking
-      setLastSpokenMessageId(assistantMessage.id);
-      
     } catch (error) {
       console.error('Conversation API error:', error);
-      
+
       // Add error message
       const errorMessage = {
         id: `error-${Date.now()}`,
@@ -289,11 +489,20 @@ export default function ConversationPage() {
         timestamp: new Date(),
       };
       addMessage(errorMessage);
-      
+
       // Mark error message for speaking too
       setLastSpokenMessageId(errorMessage.id);
     } finally {
       setProcessing(false);
+      setIsStreaming(false);
+      setStreamingResponse('');
+
+      // Safety: Clear AI speaking state after a delay if no speech is active
+      setTimeout(() => {
+        if (speechQueue.length === 0 && !isSpeaking) {
+          setTimeout(() => setAISpeaking(false), 0);
+        }
+      }, 2000);
     }
   };
 

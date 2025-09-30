@@ -78,8 +78,8 @@ export function EmotionalBackdrop({
   const currentMood = mood;
   const backgroundColors = backgroundGradientConfigs[currentMood] || backgroundGradientConfigs.neutral;
 
-  console.log('EmotionalBackdrop RENDER - mood prop:', mood, 'currentMood:', currentMood, 'backgroundColors:', backgroundColors);
-  console.log('EmotionalBackdrop - gradient will be:', `radial-gradient(circle at 50% 50%, ${backgroundColors.primary} 0%, ${backgroundColors.secondary} 35%, ${backgroundColors.accent} 55%, transparent 75%)`);
+  // console.log('EmotionalBackdrop RENDER - mood prop:', mood, 'currentMood:', currentMood, 'backgroundColors:', backgroundColors);
+  // console.log('EmotionalBackdrop - gradient will be:', `radial-gradient(circle at 50% 50%, ${backgroundColors.primary} 0%, ${backgroundColors.secondary} 35%, ${backgroundColors.accent} 55%, transparent 75%)`);
 
 
 

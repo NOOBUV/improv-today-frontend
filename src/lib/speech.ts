@@ -44,6 +44,27 @@ interface TextToSpeechOptions {
   pitch?: number;
   volume?: number;
   lang?: string;
+  moodBasedTiming?: MoodBasedTiming;
+}
+
+interface MoodBasedTiming {
+  mood?: string;
+  baseRate?: number;
+  basePitch?: number;
+  pauseMultiplier?: number;
+  rhythmPattern?: 'excited' | 'calm' | 'nervous' | 'neutral';
+}
+
+// PauseMarker interface for future enhancement
+// interface PauseMarker {
+//   type: 'pause' | 'breath' | 'thinking';
+//   duration: number;
+//   position: number;
+// }
+
+interface SpeechChunk {
+  text: string;
+  pauseAfter?: number;
 }
 
 // Main Browser Speech Service (simplified)
@@ -52,6 +73,9 @@ export class BrowserSpeechService {
   private synth: SpeechSynthesis | null = null;
   private voices: SpeechSynthesisVoice[] = [];
   private selectedVoice: SpeechSynthesisVoice | null = null;
+  private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private speechQueue: SpeechChunk[] = [];
+  private isCurrentlySpeaking: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -170,6 +194,145 @@ export class BrowserSpeechService {
     }
   }
 
+  // Parse pause markers from text and create speech chunks
+  private parseTextWithPauses(text: string, moodTiming?: MoodBasedTiming): SpeechChunk[] {
+    if (!text.trim()) return [];
+
+    // Regex to find pause markers: [pause:500ms], [breath], [thinking]
+    const pauseRegex = /\[(pause|breath|thinking)(?::(\d+)ms)?\]/gi;
+    const chunks: SpeechChunk[] = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = pauseRegex.exec(text)) !== null) {
+      // Add text before the pause marker
+      if (match.index > lastIndex) {
+        const textChunk = text.substring(lastIndex, match.index).trim();
+        if (textChunk) {
+          chunks.push({ text: textChunk });
+        }
+      }
+
+      // Calculate pause duration based on type and mood
+      const pauseType = match[1].toLowerCase();
+      const explicitDuration = match[2] ? parseInt(match[2]) : null;
+      const pauseDuration = this.calculatePauseDuration(pauseType, explicitDuration, moodTiming);
+
+      // Add pause to the last chunk or create new chunk if none exists
+      if (chunks.length > 0) {
+        chunks[chunks.length - 1].pauseAfter = pauseDuration;
+      } else {
+        // Pause at the beginning - create empty chunk with pause
+        chunks.push({ text: '', pauseAfter: pauseDuration });
+      }
+
+      lastIndex = pauseRegex.lastIndex;
+    }
+
+    // Add remaining text after last pause marker
+    if (lastIndex < text.length) {
+      const remainingText = text.substring(lastIndex).trim();
+      if (remainingText) {
+        chunks.push({ text: remainingText });
+      }
+    }
+
+    // If no pause markers found, return original text as single chunk
+    if (chunks.length === 0) {
+      chunks.push({ text: text.trim() });
+    }
+
+    return chunks;
+  }
+
+  // Calculate pause duration based on type and mood
+  private calculatePauseDuration(
+    pauseType: string,
+    explicitDuration: number | null,
+    moodTiming?: MoodBasedTiming
+  ): number {
+    // Base durations in milliseconds
+    const baseDurations = {
+      pause: 500,
+      breath: 800,
+      thinking: 1200
+    };
+
+    let duration = baseDurations[pauseType as keyof typeof baseDurations] || 500;
+
+    // Use explicit duration if provided
+    if (explicitDuration !== null) {
+      duration = explicitDuration;
+    }
+
+    // Apply mood-based timing adjustments
+    if (moodTiming) {
+      const multiplier = moodTiming.pauseMultiplier || 1.0;
+
+      // Adjust based on rhythm pattern
+      switch (moodTiming.rhythmPattern) {
+        case 'excited':
+          duration *= 0.6; // Shorter pauses when excited
+          break;
+        case 'calm':
+          duration *= 1.4; // Longer pauses when calm
+          break;
+        case 'nervous':
+          // Irregular timing - vary by pause type
+          duration *= pauseType === 'thinking' ? 1.8 : 0.4;
+          break;
+        case 'neutral':
+        default:
+          duration *= multiplier;
+          break;
+      }
+    }
+
+    return Math.max(100, Math.min(3000, duration)); // Clamp between 100ms and 3s
+  }
+
+  // Apply mood-based speech rate and pitch adjustments
+  private applyMoodBasedTiming(options: TextToSpeechOptions): TextToSpeechOptions {
+    if (!options.moodBasedTiming) return options;
+
+    const moodTiming = options.moodBasedTiming;
+    const enhancedOptions = { ...options };
+
+    // Apply base rate and pitch from mood
+    if (moodTiming.baseRate !== undefined) {
+      enhancedOptions.rate = moodTiming.baseRate;
+    }
+    if (moodTiming.basePitch !== undefined) {
+      enhancedOptions.pitch = moodTiming.basePitch;
+    }
+
+    // Apply rhythm pattern adjustments
+    switch (moodTiming.rhythmPattern) {
+      case 'excited':
+        enhancedOptions.rate = (enhancedOptions.rate || 0.9) * 1.2;
+        enhancedOptions.pitch = (enhancedOptions.pitch || 1) * 1.1;
+        break;
+      case 'calm':
+        enhancedOptions.rate = (enhancedOptions.rate || 0.9) * 0.85;
+        enhancedOptions.pitch = (enhancedOptions.pitch || 1) * 0.95;
+        break;
+      case 'nervous':
+        enhancedOptions.rate = (enhancedOptions.rate || 0.9) * 1.1;
+        enhancedOptions.pitch = (enhancedOptions.pitch || 1) * 1.05;
+        break;
+      case 'neutral':
+      default:
+        // Keep existing values
+        break;
+    }
+
+    // Ensure values stay within valid ranges
+    enhancedOptions.rate = Math.max(0.1, Math.min(10, enhancedOptions.rate || 0.9));
+    enhancedOptions.pitch = Math.max(0, Math.min(2, enhancedOptions.pitch || 1));
+
+    return enhancedOptions;
+  }
+
   // Load available voices
   private loadVoices(): void {
     if (!this.synth) return;
@@ -184,9 +347,9 @@ export class BrowserSpeechService {
     }
   }
 
-  // Speak text using Chrome Web Speech Synthesis
+  // Enhanced speak method with pause control and mood-based timing
   speak(
-    text: string, 
+    text: string,
     options: TextToSpeechOptions = {},
     onEnd?: () => void,
     onError?: (error: string) => void
@@ -195,25 +358,111 @@ export class BrowserSpeechService {
 
     // Chrome fix: Always cancel before speaking to fix Chrome 130 issues
     this.synth.cancel();
-    
+    this.isCurrentlySpeaking = false;
+    this.speechQueue = [];
+
     // Wait a bit for cancel to take effect (Chrome needs this)
-    setTimeout(() => this.speakNow(text, options, onEnd, onError), 100);
+    setTimeout(() => this.speakWithPauses(text, options, onEnd, onError), 100);
   }
 
-  private speakNow(text: string, options: TextToSpeechOptions, onEnd?: () => void, onError?: (error: string) => void) {
+  // New method to handle speech with pause markers
+  private async speakWithPauses(
+    text: string,
+    options: TextToSpeechOptions,
+    onEnd?: () => void,
+    onError?: (error: string) => void
+  ) {
     if (!text.trim() || !this.synth) return;
+
+    try {
+      // Apply mood-based timing adjustments to options
+      const enhancedOptions = this.applyMoodBasedTiming(options);
+
+      // Parse text into chunks with pauses
+      const speechChunks = this.parseTextWithPauses(text, options.moodBasedTiming);
+
+      if (speechChunks.length === 0) {
+        onEnd?.();
+        return;
+      }
+
+      // Set speaking state
+      this.isCurrentlySpeaking = true;
+      this.speechQueue = speechChunks;
+
+      // Start speaking the chunks sequentially
+      await this.speakChunksSequentially(speechChunks, enhancedOptions, onEnd, onError);
+
+    } catch (error) {
+      this.isCurrentlySpeaking = false;
+      onError?.(`Failed to process speech with pauses: ${error}`);
+    }
+  }
+
+  // Speak chunks sequentially with pauses
+  private async speakChunksSequentially(
+    chunks: SpeechChunk[],
+    options: TextToSpeechOptions,
+    onEnd?: () => void,
+    onError?: (error: string) => void
+  ) {
+    if (!this.synth) return;
+
+    let currentIndex = 0;
+
+    const speakNextChunk = () => {
+      if (currentIndex >= chunks.length || !this.isCurrentlySpeaking) {
+        this.isCurrentlySpeaking = false;
+        onEnd?.();
+        return;
+      }
+
+      const chunk = chunks[currentIndex];
+      currentIndex++;
+
+      // If chunk has text, speak it
+      if (chunk.text.trim()) {
+        this.speakChunk(chunk.text, options, () => {
+          // After speaking, handle pause if needed
+          if (chunk.pauseAfter && this.isCurrentlySpeaking) {
+            setTimeout(speakNextChunk, chunk.pauseAfter);
+          } else {
+            speakNextChunk();
+          }
+        }, onError);
+      } else if (chunk.pauseAfter) {
+        // Empty text with pause - just wait
+        setTimeout(speakNextChunk, chunk.pauseAfter);
+      } else {
+        // Empty chunk, continue immediately
+        speakNextChunk();
+      }
+    };
+
+    speakNextChunk();
+  }
+
+  // Speak a single chunk of text
+  private speakChunk(
+    text: string,
+    options: TextToSpeechOptions,
+    onChunkEnd?: () => void,
+    onError?: (error: string) => void
+  ) {
+    if (!text.trim() || !this.synth) {
+      onChunkEnd?.();
+      return;
+    }
 
     // Check if voices are loaded
     if (this.voices.length === 0) {
-      // No voices loaded, trying to reload
       this.loadVoices();
       setTimeout(() => {
         if (this.voices.length === 0) {
-          // Still no voices available
           onError?.('No voices available');
           return;
         }
-        this.speakNow(text, options, onEnd, onError);
+        this.speakChunk(text, options, onChunkEnd, onError);
       }, 500);
       return;
     }
@@ -224,36 +473,34 @@ export class BrowserSpeechService {
     utterance.voice = selectedVoice;
     utterance.rate = options.rate ?? 0.9;
     utterance.pitch = options.pitch ?? 1;
-    utterance.volume = options.volume ?? 1.0; // Max volume
-    utterance.lang = options.lang ?? 'en-GB'; // Strict en-GB default
-    
-    // Voice settings configured
+    utterance.volume = options.volume ?? 1.0;
+    utterance.lang = options.lang ?? 'en-GB';
+
+    this.currentUtterance = utterance;
 
     utterance.onend = () => {
-      // Speech completed successfully
-      onEnd?.();
+      this.currentUtterance = null;
+      onChunkEnd?.();
     };
-    
+
     utterance.onerror = (event) => {
-      // Speech error event
+      this.currentUtterance = null;
       if (event.error === 'canceled') {
-        // Speech was canceled
-        onEnd?.(); // Reset state even if canceled
+        onChunkEnd?.();
         return;
       }
-      // Speech synthesis error
       onError?.(`Speech error: ${event.error}`);
     };
 
-    // Speak immediately
+    // Speak the chunk
     try {
-      // Speaking now
       this.synth.speak(utterance);
     } catch (error) {
-      // Failed to start speech
+      this.currentUtterance = null;
       onError?.(`Failed to start speech: ${error}`);
     }
   }
+
 
 
   // Get curated list of premium high-quality voices
@@ -346,8 +593,182 @@ export class BrowserSpeechService {
     return englishVoices[0];
   }
 
-  // Stop speaking
+  // Inject intelligent pause markers based on content analysis
+  injectPauseMarkers(text: string, emotionalState?: string): string {
+    if (!text.trim()) return text;
+
+    let enhancedText = text;
+
+    // Add pauses after punctuation marks based on emotional state
+    const pauseSettings = this.getPauseSettingsForEmotion(emotionalState);
+
+    // Add breathing pauses after sentences
+    enhancedText = enhancedText.replace(/([.!?])\s+/g, `$1 [${pauseSettings.sentencePause}] `);
+
+    // Add thinking pauses before questions
+    enhancedText = enhancedText.replace(/(\?\s*)/g, ` [${pauseSettings.questionPause}]$1`);
+
+    // Add brief pauses after commas for natural rhythm
+    enhancedText = enhancedText.replace(/(,)\s+/g, `$1 [${pauseSettings.commaPause}] `);
+
+    // Add emphasis pauses around important words (words in caps or with emphasis)
+    enhancedText = enhancedText.replace(/\b([A-Z]{2,})\b/g, `[pause:200ms] $1 [pause:200ms]`);
+
+    // Add thinking pauses before complex explanations
+    enhancedText = enhancedText.replace(/\b(because|however|meanwhile|therefore|consequently)\b/gi, `[${pauseSettings.thinkingPause}] $1`);
+
+    return enhancedText;
+  }
+
+  // Get pause settings based on emotional state
+  private getPauseSettingsForEmotion(emotionalState?: string) {
+    const baseSettings = {
+      sentencePause: 'breath',
+      questionPause: 'thinking',
+      commaPause: 'pause:300ms',
+      thinkingPause: 'thinking'
+    };
+
+    switch (emotionalState?.toLowerCase()) {
+      case 'excited':
+      case 'happy':
+        return {
+          sentencePause: 'pause:400ms',
+          questionPause: 'pause:600ms',
+          commaPause: 'pause:200ms',
+          thinkingPause: 'pause:500ms'
+        };
+      case 'calm':
+      case 'relaxed':
+        return {
+          sentencePause: 'breath',
+          questionPause: 'thinking',
+          commaPause: 'pause:500ms',
+          thinkingPause: 'thinking'
+        };
+      case 'nervous':
+      case 'anxious':
+        return {
+          sentencePause: 'pause:300ms',
+          questionPause: 'pause:800ms',
+          commaPause: 'pause:150ms',
+          thinkingPause: 'pause:1000ms'
+        };
+      case 'sad':
+      case 'melancholy':
+        return {
+          sentencePause: 'pause:800ms',
+          questionPause: 'pause:1200ms',
+          commaPause: 'pause:600ms',
+          thinkingPause: 'pause:1500ms'
+        };
+      default:
+        return baseSettings;
+    }
+  }
+
+  // Create mood-based timing options for Clara's emotional state
+  createMoodBasedTiming(
+    mood: string,
+    intensity: number = 5,
+    bpmFromHeartbeat?: number
+  ): MoodBasedTiming {
+    const normalizedIntensity = Math.max(1, Math.min(10, intensity));
+
+    // Base timing configurations for Clara's 8-mood system
+    const moodConfigs = {
+      happy: {
+        baseRate: 1.0 + (normalizedIntensity - 5) * 0.1,
+        basePitch: 1.1 + (normalizedIntensity - 5) * 0.05,
+        rhythmPattern: 'excited' as const,
+        pauseMultiplier: 0.7
+      },
+      excited: {
+        baseRate: 1.2 + (normalizedIntensity - 5) * 0.15,
+        basePitch: 1.2 + (normalizedIntensity - 5) * 0.1,
+        rhythmPattern: 'excited' as const,
+        pauseMultiplier: 0.5
+      },
+      calm: {
+        baseRate: 0.8 - (normalizedIntensity - 5) * 0.05,
+        basePitch: 0.95 - (normalizedIntensity - 5) * 0.02,
+        rhythmPattern: 'calm' as const,
+        pauseMultiplier: 1.5
+      },
+      sad: {
+        baseRate: 0.7 - (normalizedIntensity - 5) * 0.08,
+        basePitch: 0.9 - (normalizedIntensity - 5) * 0.05,
+        rhythmPattern: 'calm' as const,
+        pauseMultiplier: 1.8
+      },
+      angry: {
+        baseRate: 1.1 + (normalizedIntensity - 5) * 0.12,
+        basePitch: 1.05 + (normalizedIntensity - 5) * 0.08,
+        rhythmPattern: 'nervous' as const,
+        pauseMultiplier: 0.6
+      },
+      anxious: {
+        baseRate: 1.05 + (normalizedIntensity - 5) * 0.08,
+        basePitch: 1.08 + (normalizedIntensity - 5) * 0.06,
+        rhythmPattern: 'nervous' as const,
+        pauseMultiplier: 0.8
+      },
+      neutral: {
+        baseRate: 0.9,
+        basePitch: 1.0,
+        rhythmPattern: 'neutral' as const,
+        pauseMultiplier: 1.0
+      },
+      confused: {
+        baseRate: 0.85 - (normalizedIntensity - 5) * 0.05,
+        basePitch: 0.98 - (normalizedIntensity - 5) * 0.03,
+        rhythmPattern: 'nervous' as const,
+        pauseMultiplier: 1.3
+      }
+    };
+
+    const config = moodConfigs[mood as keyof typeof moodConfigs] || moodConfigs.neutral;
+
+    // Adjust timing based on BPM from HeartbeatIcon if available
+    if (bpmFromHeartbeat) {
+      const bpmFactor = bpmFromHeartbeat / 60; // Normalize to 60 BPM baseline
+      config.baseRate *= Math.max(0.7, Math.min(1.5, bpmFactor));
+      config.pauseMultiplier /= Math.max(0.8, Math.min(1.3, bpmFactor));
+    }
+
+    // Ensure values stay within Web Speech API limits
+    config.baseRate = Math.max(0.1, Math.min(10, config.baseRate));
+    config.basePitch = Math.max(0, Math.min(2, config.basePitch));
+
+    return {
+      mood: mood,
+      baseRate: config.baseRate,
+      basePitch: config.basePitch,
+      rhythmPattern: config.rhythmPattern,
+      pauseMultiplier: config.pauseMultiplier
+    };
+  }
+
+  // Check if currently speaking (for integration with conversation state)
+  isSpeaking(): boolean {
+    return this.isCurrentlySpeaking;
+  }
+
+  // Get current utterance information
+  getCurrentUtterance(): SpeechSynthesisUtterance | null {
+    return this.currentUtterance;
+  }
+
+  // Get speech queue status
+  getSpeechQueueLength(): number {
+    return this.speechQueue.length;
+  }
+
+  // Stop speaking with enhanced pause control
   stopSpeaking() {
+    this.isCurrentlySpeaking = false;
+    this.speechQueue = [];
+    this.currentUtterance = null;
     this.synth?.cancel();
   }
 

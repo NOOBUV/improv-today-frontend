@@ -112,22 +112,26 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
   }, [clearTranscript, setListening, setError, setTranscript, stopSilenceTimer, handleFinalTranscript, onAudioStream]);
 
   // Handle AI response - speak it and auto-restart listening
+  const lastProcessedResponse = useRef<string>('');
+
   useEffect(() => {
-    if (aiResponse && !disabled) {
+    if (aiResponse && !disabled && aiResponse !== lastProcessedResponse.current) {
+      lastProcessedResponse.current = aiResponse;
+
       const speakAndRestart = async () => {
         setAISpeaking(true);
         await speechRef.current?.speak(aiResponse);
         setAISpeaking(false);
-        
+
         // Auto-start listening after AI finishes speaking
         setTimeout(() => {
           startListening();
         }, config.aiSpeech.autoStartListeningDelay);
       };
-      
+
       speakAndRestart();
     }
-  }, [aiResponse, disabled, setAISpeaking, startListening]);
+  }, [aiResponse, disabled]);
 
   const handleToggle = async () => {
     if (disabled || isAISpeaking) return;
