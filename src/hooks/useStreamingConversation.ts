@@ -21,6 +21,7 @@ export interface StreamingConversationState {
   isStreaming: boolean;
   currentChunk: string;
   accumulatedResponse: string;
+  currentEmotion: string;
   chunksReceived: number;
   streamingStartTime: number | null;
   firstChunkTime: number | null;
@@ -47,6 +48,7 @@ export function useStreamingConversation(options: UseStreamingConversationOption
     isStreaming: false,
     currentChunk: '',
     accumulatedResponse: '',
+    currentEmotion: 'calm',
     chunksReceived: 0,
     streamingStartTime: null,
     firstChunkTime: null
@@ -72,6 +74,7 @@ export function useStreamingConversation(options: UseStreamingConversationOption
         isStreaming: true,
         currentChunk: '',
         accumulatedResponse: '',
+        currentEmotion: 'calm',
         chunksReceived: 0,
         streamingStartTime: Date.now(),
         firstChunkTime: null
@@ -96,13 +99,14 @@ export function useStreamingConversation(options: UseStreamingConversationOption
 
       // Start streaming conversation
       await streamingClient.current.startConversation(request, authToken, {
-        onChunk: (chunk: string, totalResponse: string) => {
+        onChunk: (chunk: string, totalResponse: string, emotion: string) => {
           const now = Date.now();
 
           setStreamingState(prev => ({
             ...prev,
             currentChunk: chunk,
             accumulatedResponse: totalResponse,
+            currentEmotion: emotion,
             chunksReceived: prev.chunksReceived + 1,
             firstChunkTime: prev.firstChunkTime || now
           }));

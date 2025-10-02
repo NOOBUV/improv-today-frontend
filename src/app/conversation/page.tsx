@@ -41,11 +41,11 @@ export default function ConversationPage() {
     }))
   );
   
-  const [currentMood] = useState<EmotionalMood>('happy');
+  const [currentMood, setCurrentMood] = useState<EmotionalMood>('happy');
   const [lastSpokenMessageId, setLastSpokenMessageId] = useState<string>('');
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
   const [conversationIntensity, setConversationIntensity] = useState<'low' | 'medium' | 'high'>('low');
-  const [lastApiMoodUpdate] = useState<number>(0);
+  const [lastApiMoodUpdate, setLastApiMoodUpdate] = useState<number>(0);
   const [heartbeatConfig] = useState<HeartbeatConfiguration>({
     enabled: true,
     audioEnabled: true,
@@ -77,6 +77,8 @@ export default function ConversationPage() {
   const spokenTextRef = useRef<string>('');
   const speechCompletedRef = useRef<boolean>(false);
   const totalSpeechSegmentsRef = useRef<number>(0);
+  const firstSpeechStartRef = useRef<number | null>(null);
+  const requestSentTimeRef = useRef<number | null>(null);
 
 
   // Initialize speech synthesis with Clara's voice
@@ -148,7 +150,11 @@ export default function ConversationPage() {
       utterance.volume = 1.0;
 
       utterance.onstart = () => {
-        console.log('🎤 SPEECH STARTED at', new Date().toISOString(), ':', nextText);
+        if (firstSpeechStartRef.current === null && requestSentTimeRef.current !== null) {
+          firstSpeechStartRef.current = performance.now();
+          const timeSinceRequest = firstSpeechStartRef.current - requestSentTimeRef.current;
+          console.log(`🎤 FIRST SPEECH STARTED at ${timeSinceRequest.toFixed(0)}ms after request sent`);
+        }
         setIsSpeaking(true);
         // Use setTimeout to avoid setState during render
         setTimeout(() => setAISpeaking(true), 0);
@@ -326,6 +332,11 @@ export default function ConversationPage() {
   const handleTranscriptComplete = async (transcript: string) => {
     if (!transcript.trim()) return;
 
+    // Reset timing tracking for new conversation
+    requestSentTimeRef.current = performance.now();
+    firstSpeechStartRef.current = null;
+    console.log('📤 MESSAGE SENT TO BACKEND');
+
     setProcessing(true);
     setIsStreaming(true);
     setStreamingResponse('');
@@ -339,6 +350,15 @@ export default function ConversationPage() {
       speechSynthRef.current.cancel();
     }
     setIsSpeaking(false);
+
+    // Pre-warm speech synthesis to reduce first-speech latency
+    if (speechSynthRef.current && claraVoice) {
+      const warmupUtterance = new SpeechSynthesisUtterance('');
+      warmupUtterance.voice = claraVoice;
+      warmupUtterance.volume = 0; // Silent
+      speechSynthRef.current.speak(warmupUtterance);
+      speechSynthRef.current.cancel(); // Immediately cancel
+    }
 
     // Add user message to chat
     const userMessage = {
@@ -388,11 +408,19 @@ export default function ConversationPage() {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let accumulatedResponse = '';
+      let accumulatedResponse = '';  // This will store the filtered message content only
+      let accumulatedJson = '';  // This will store the raw JSON for parsing emotion
+      let messageStarted = false;
+      let insideMessage = false;
       let finalData: any = null;
+      const streamStartTime = performance.now();
+      let firstChunkReceived = false;
+      let firstChunkTime: number | null = null;
+      let lastChunkTime: number | null = null;
 
       while (reader) {
         const { done, value } = await reader.read();
+
         if (done) break;
 
         // Decode the chunk and add to buffer
@@ -417,18 +445,63 @@ export default function ConversationPage() {
 
               // Handle consciousness chunks for progressive display and speech
               if (eventData.chunk) {
-                console.log('📦 CHUNK RECEIVED at', new Date().toISOString(), ':', eventData.chunk);
-                accumulatedResponse += eventData.chunk;
+                // Track first chunk timing
+                if (!firstChunkReceived) {
+                  firstChunkReceived = true;
+                  firstChunkTime = performance.now();
+                  console.log(`⚡ FIRST CHUNK RECEIVED at ${(firstChunkTime - streamStartTime).toFixed(0)}ms after request sent`);
+                }
+
+                // Track last chunk timing
+                lastChunkTime = performance.now();
+
+                // Accumulate raw JSON for emotion parsing
+                accumulatedJson += eventData.chunk;
+
+                // Filter JSON structure to extract only message content
+                const rawChunk = eventData.chunk;
+
+                // STATE 1: Looking for "message": " pattern
+                if (!messageStarted) {
+                  const messageFieldPattern = /"message"\s*:\s*"/;
+                  if (messageFieldPattern.test(accumulatedJson)) {
+                    messageStarted = true;
+                    insideMessage = true;
+
+                    // Extract content that's already accumulated after "message": "
+                    const match = accumulatedJson.match(messageFieldPattern);
+                    if (match) {
+                      const patternEndIdx = (match.index || 0) + match[0].length;
+                      const alreadyAccumulated = accumulatedJson.substring(patternEndIdx);
+                      accumulatedResponse += alreadyAccumulated;
+                    }
+                  }
+                } else if (insideMessage) {
+                  // STATE 2: Inside message field - accumulate content unless it's the closing
+                  if (rawChunk.includes('",') || (rawChunk.includes('"') && accumulatedJson.includes('"emotion"'))) {
+                    insideMessage = false;
+                    // Add content before the closing quote
+                    const endIdx = rawChunk.indexOf('"');
+                    if (endIdx > 0) {
+                      accumulatedResponse += rawChunk.substring(0, endIdx);
+                    }
+                  } else {
+                    // Regular message content - add as-is
+                    accumulatedResponse += rawChunk;
+                  }
+                }
+
                 setStreamingResponse(accumulatedResponse);
 
-                // Queue chunks for progressive speech
-                // Find new text that hasn't been spoken yet
+                // Queue chunks for progressive speech (only filtered content)
                 const newText = accumulatedResponse.substring(spokenTextRef.current.length);
 
-                // Look for sentence/phrase boundaries in new text
-                if (newText.includes('.') || newText.includes('!') || newText.includes('?') ||
-                    (newText.includes(',') && newText.length > 10) || newText.length > 30) {
+                // Progressive speech queuing - only queue complete sentences to avoid duplicates
+                // Sentences arrive quickly in stream (~200-500ms), so we still get fast speech start
+                const hasSentenceEnd = newText.includes('.') || newText.includes('!') || newText.includes('?');
 
+                // Queue complete sentences only - prevents duplicate speech of partial phrases
+                if (hasSentenceEnd) {
                   // Find complete sentences/phrases to speak
                   const sentences = accumulatedResponse.match(/[^.!?]*[.!?]/g) || [];
                   const spokenSentences = spokenTextRef.current.match(/[^.!?]*[.!?]/g) || [];
@@ -449,8 +522,37 @@ export default function ConversationPage() {
 
               // Handle complete response
               if (eventData.response) {
-                console.log('✅ COMPLETE RESPONSE at', new Date().toISOString());
+                const completeTime = performance.now();
+                const totalStreamTime = completeTime - streamStartTime;
+
+                console.log(`✅ COMPLETE RESPONSE received`);
+                if (lastChunkTime !== null) {
+                  console.log(`⏱️  LAST CHUNK was at ${(lastChunkTime - streamStartTime).toFixed(0)}ms after request`);
+                }
+                console.log(`⏱️  TOTAL STREAM TIME: ${totalStreamTime.toFixed(0)}ms`);
+
                 finalData = eventData;
+
+                // Extract emotion from simulation_context
+                if (eventData.simulation_context?.conversation_emotion) {
+                  const backendEmotion = eventData.simulation_context.conversation_emotion;
+
+                  // Map backend emotion to frontend EmotionalMood
+                  const emotionMap: Record<string, EmotionalMood> = {
+                    'calm': 'calm',
+                    'happy': 'happy',
+                    'sad': 'sad',
+                    'stressed': 'frustrated',
+                    'sassy': 'excited',
+                    'neutral': 'calm'
+                  };
+
+                  const mappedMood = emotionMap[backendEmotion] || 'calm';
+
+                  console.log(`🎭 Emotion from API: ${backendEmotion} → ${mappedMood}`);
+                  setCurrentMood(mappedMood);
+                  setLastApiMoodUpdate(Date.now());
+                }
               }
             } catch (e) {
               console.error('Error parsing SSE data:', e);
