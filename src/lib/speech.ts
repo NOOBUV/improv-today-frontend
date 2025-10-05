@@ -156,19 +156,6 @@ export class BrowserSpeechService {
             confidence: result[0].confidence || 0.8,
             isFinal: result.isFinal,
           });
-          
-          // On mobile, auto-restart if continuous is false and we got a final result
-          if (isMobile && result.isFinal && !this.recognition?.continuous) {
-            setTimeout(() => {
-              if (this.recognition) {
-                try {
-                  this.recognition.start();
-                } catch {
-                  // Failed to restart recognition
-                }
-              }
-            }, 100);
-          }
         }
       };
 

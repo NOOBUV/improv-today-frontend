@@ -439,7 +439,11 @@ export function VoiceWaveform({ isListening = false, isSpeaking = false, audioSt
   }
 
   return (
-    <div className="relative w-full h-full min-h-[200px]" role="region" aria-label="Voice interaction interface">
+    <div
+      className="relative w-full h-full min-h-[200px] overflow-hidden"
+      role="region"
+      aria-label="Voice interaction interface"
+    >
       {/* ARIA Live Region for status updates */}
       <div
         aria-live="polite"

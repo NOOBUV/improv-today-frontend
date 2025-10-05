@@ -503,7 +503,7 @@ export default function ConversationPage() {
       />
 
       {/* Main Content */}
-      <div className="relative z-10 flex flex-col h-screen">
+      <div className="relative z-10 flex flex-col min-h-[100svh] supports-[min-height:100dvh]:min-h-[100dvh]">
         {/* Header */}
         <header className="p-4 border-b border-white/20" role="banner">
           <div className="max-w-4xl mx-auto flex justify-between items-center">
