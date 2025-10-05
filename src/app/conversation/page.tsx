@@ -22,6 +22,7 @@ import { HeartbeatControls } from '@/components/clara/HeartbeatControls';
 import { type HeartbeatConfiguration } from '@/components/clara/HeartbeatConfig';
 import { getPerformanceMonitor } from '@/lib/heartbeat-performance';
 import { config } from '@/lib/config';
+import { BrowserSpeechService } from '@/lib/speech';
 import Link from 'next/link';
 
 export default function ConversationPage() {
@@ -42,7 +43,6 @@ export default function ConversationPage() {
   );
   
   const [currentMood, setCurrentMood] = useState<EmotionalMood>('happy');
-  const [lastSpokenMessageId, setLastSpokenMessageId] = useState<string>('');
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
   const [conversationIntensity, setConversationIntensity] = useState<'low' | 'medium' | 'high'>('low');
   const [lastApiMoodUpdate, setLastApiMoodUpdate] = useState<number>(0);
@@ -69,146 +69,43 @@ export default function ConversationPage() {
   const [, setIsStreaming] = useState(false);
   const [, setStreamingResponse] = useState('');
 
-  // Progressive speech state
-  const [speechQueue, setSpeechQueue] = useState<string[]>([]);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const speechSynthRef = useRef<SpeechSynthesis | null>(null);
-  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const spokenTextRef = useRef<string>('');
-  const speechCompletedRef = useRef<boolean>(false);
-  const totalSpeechSegmentsRef = useRef<number>(0);
+  // Progressive speech state using BrowserSpeechService
+  const speechServiceRef = useRef<BrowserSpeechService | null>(null);
   const firstSpeechStartRef = useRef<number | null>(null);
   const requestSentTimeRef = useRef<number | null>(null);
 
-
-  // Initialize speech synthesis with Clara's voice
-  const [claraVoice, setClaraVoice] = useState<SpeechSynthesisVoice | null>(null);
-
+  // Initialize BrowserSpeechService with callbacks
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      speechSynthRef.current = window.speechSynthesis;
+    if (typeof window !== 'undefined') {
+      speechServiceRef.current = new BrowserSpeechService();
 
-      // Load Clara's preferred voice (same logic as BrowserSpeechService)
-      const loadClaraVoice = () => {
-        const voices = speechSynthRef.current?.getVoices() || [];
-        if (voices.length === 0) return;
+      // Set up streaming callbacks
+      speechServiceRef.current.setStreamingCallbacks({
+        onSentenceQueued: (text) => {
+          // Track first speech timing
+          if (firstSpeechStartRef.current === null && requestSentTimeRef.current !== null) {
+            firstSpeechStartRef.current = performance.now();
+            const timeSinceRequest = firstSpeechStartRef.current - requestSentTimeRef.current;
+            console.log(`🎤 FIRST SPEECH STARTED at ${timeSinceRequest.toFixed(0)}ms after request sent`);
+          }
 
-        // Priority 1: Google UK English Female (Clara's preferred voice)
-        const googleUKFemale = voices.find(voice =>
-          voice.name === 'Google UK English Female' ||
-          (voice.name.toLowerCase().includes('google') &&
-           voice.name.toLowerCase().includes('uk') &&
-           voice.name.toLowerCase().includes('female'))
-        );
+          setAISpeaking(true);
+          console.log('🗣️ QUEUING SPEECH:', text);
+        },
+        onComplete: () => {
+          setAISpeaking(false);
 
-        if (googleUKFemale) {
-          setClaraVoice(googleUKFemale);
-          return;
+          // Auto-start listening after Clara finishes speaking
+          setTimeout(() => {
+            if (speechInterfaceRef.current?.handleToggle) {
+              speechInterfaceRef.current.handleToggle();
+            }
+          }, config.aiSpeech.autoStartListeningDelay);
         }
-
-        // Priority 2: Any UK English voices
-        const ukVoices = voices.filter(voice =>
-          voice.lang.toLowerCase() === 'en-gb' ||
-          voice.lang.toLowerCase() === 'en_gb'
-        );
-
-        if (ukVoices.length > 0) {
-          const qualityUkVoice = ukVoices.find(voice => {
-            const voiceName = voice.name.toLowerCase();
-            return ['google', 'microsoft', 'natural', 'neural', 'premium'].some(indicator =>
-              voiceName.includes(indicator)
-            );
-          });
-          setClaraVoice(qualityUkVoice || ukVoices[0]);
-          return;
-        }
-
-        // Priority 3: Default English voice
-        const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
-        setClaraVoice(englishVoices[0] || null);
-      };
-
-      // Load voices
-      if (speechSynthRef.current.getVoices().length > 0) {
-        loadClaraVoice();
-      } else {
-        speechSynthRef.current.onvoiceschanged = loadClaraVoice;
-      }
+      });
     }
   }, []);
 
-  // Progressive speech processing
-  useEffect(() => {
-    if (speechQueue.length > 0 && !isSpeaking && speechSynthRef.current) {
-      const nextText = speechQueue[0];
-      setSpeechQueue(prev => prev.slice(1));
-
-      const utterance = new SpeechSynthesisUtterance(nextText);
-      utterance.voice = claraVoice; // Use Clara's preferred voice
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-
-      utterance.onstart = () => {
-        if (firstSpeechStartRef.current === null && requestSentTimeRef.current !== null) {
-          firstSpeechStartRef.current = performance.now();
-          const timeSinceRequest = firstSpeechStartRef.current - requestSentTimeRef.current;
-          console.log(`🎤 FIRST SPEECH STARTED at ${timeSinceRequest.toFixed(0)}ms after request sent`);
-        }
-        setIsSpeaking(true);
-        // Use setTimeout to avoid setState during render
-        setTimeout(() => setAISpeaking(true), 0);
-        currentUtteranceRef.current = utterance;
-      };
-
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        currentUtteranceRef.current = null;
-        totalSpeechSegmentsRef.current -= 1;
-
-        // Only proceed with final cleanup when all speech segments are complete
-        setTimeout(() => {
-          setSpeechQueue(currentQueue => {
-            // Only trigger auto-listening when both queue is empty AND all expected segments are done
-            if (currentQueue.length === 0 && totalSpeechSegmentsRef.current <= 0 && !speechCompletedRef.current) {
-              speechCompletedRef.current = true;
-
-              // Use setTimeout to avoid setState during render
-              setTimeout(() => setAISpeaking(false), 0);
-
-              // Auto-start listening after Clara finishes speaking (ONLY ONCE)
-              setTimeout(() => {
-                setTimeout(() => {
-                  if (speechInterfaceRef.current?.handleToggle) {
-                    speechInterfaceRef.current.handleToggle();
-                  }
-                }, 0);
-              }, config.aiSpeech.autoStartListeningDelay);
-            }
-            return currentQueue;
-          });
-        }, 100);
-      };
-
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-        // Use setTimeout to avoid setState during render
-        setTimeout(() => setAISpeaking(false), 0);
-        currentUtteranceRef.current = null;
-      };
-
-      speechSynthRef.current.speak(utterance);
-    }
-  }, [speechQueue, isSpeaking]);
-
-  // Function to add text to speech queue
-  const queueSpeech = (text: string) => {
-    if (text.trim()) {
-      setSpeechQueue(prev => [...prev, text.trim()]);
-      totalSpeechSegmentsRef.current += 1;
-      speechCompletedRef.current = false;
-    }
-  };
 
   // Initialize performance monitoring
   useEffect(() => {
@@ -341,23 +238,12 @@ export default function ConversationPage() {
     setIsStreaming(true);
     setStreamingResponse('');
 
-    // Clear any existing speech queue for new conversation
-    setSpeechQueue([]);
-    spokenTextRef.current = '';
-    speechCompletedRef.current = false;
-    totalSpeechSegmentsRef.current = 0;
-    if (speechSynthRef.current) {
-      speechSynthRef.current.cancel();
-    }
-    setIsSpeaking(false);
+    // Clear any existing speech for new conversation
+    firstSpeechStartRef.current = null;
+    requestSentTimeRef.current = performance.now();
 
-    // Pre-warm speech synthesis to reduce first-speech latency
-    if (speechSynthRef.current && claraVoice) {
-      const warmupUtterance = new SpeechSynthesisUtterance('');
-      warmupUtterance.voice = claraVoice;
-      warmupUtterance.volume = 0; // Silent
-      speechSynthRef.current.speak(warmupUtterance);
-      speechSynthRef.current.cancel(); // Immediately cancel
+    if (speechServiceRef.current) {
+      speechServiceRef.current.stopSpeaking();
     }
 
     // Add user message to chat
@@ -417,6 +303,7 @@ export default function ConversationPage() {
       let firstChunkReceived = false;
       let firstChunkTime: number | null = null;
       let lastChunkTime: number | null = null;
+      let previousResponseLength = 0;  // Track previous length to detect new content
 
       while (reader) {
         const { done, value } = await reader.read();
@@ -493,30 +380,11 @@ export default function ConversationPage() {
 
                 setStreamingResponse(accumulatedResponse);
 
-                // Queue chunks for progressive speech (only filtered content)
-                const newText = accumulatedResponse.substring(spokenTextRef.current.length);
-
-                // Progressive speech queuing - only queue complete sentences to avoid duplicates
-                // Sentences arrive quickly in stream (~200-500ms), so we still get fast speech start
-                const hasSentenceEnd = newText.includes('.') || newText.includes('!') || newText.includes('?');
-
-                // Queue complete sentences only - prevents duplicate speech of partial phrases
-                if (hasSentenceEnd) {
-                  // Find complete sentences/phrases to speak
-                  const sentences = accumulatedResponse.match(/[^.!?]*[.!?]/g) || [];
-                  const spokenSentences = spokenTextRef.current.match(/[^.!?]*[.!?]/g) || [];
-
-                  // Get new sentences that haven't been spoken
-                  const newSentences = sentences.slice(spokenSentences.length);
-
-                  if (newSentences.length > 0) {
-                    const textToSpeak = newSentences[0].trim();
-                    if (textToSpeak.length > 3) {
-                      console.log('🗣️ QUEUING SPEECH at', new Date().toISOString(), ':', textToSpeak);
-                      queueSpeech(textToSpeak);
-                      spokenTextRef.current += newSentences[0];
-                    }
-                  }
+                // Stream only NEW content to BrowserSpeechService for processing
+                if (speechServiceRef.current && accumulatedResponse.length > previousResponseLength) {
+                  const newContent = accumulatedResponse.substring(previousResponseLength);
+                  speechServiceRef.current.queueStreamingChunk(newContent);
+                  previousResponseLength = accumulatedResponse.length;
                 }
               }
 
@@ -573,10 +441,9 @@ export default function ConversationPage() {
       };
       addMessage(assistantMessage);
 
-      // Queue any remaining unsaid text for speech
-      const remainingText = finalResponse.substring(spokenTextRef.current.length).trim();
-      if (remainingText && remainingText.length > 3) {
-        queueSpeech(remainingText);
+      // Flush any remaining buffered speech
+      if (speechServiceRef.current) {
+        speechServiceRef.current.flushStreamingBuffer();
       }
 
     } catch (error) {
@@ -590,45 +457,13 @@ export default function ConversationPage() {
         timestamp: new Date(),
       };
       addMessage(errorMessage);
-
-      // Mark error message for speaking too
-      setLastSpokenMessageId(errorMessage.id);
     } finally {
       setProcessing(false);
       setIsStreaming(false);
       setStreamingResponse('');
-
-      // Safety: Clear AI speaking state after a delay if no speech is active
-      setTimeout(() => {
-        if (speechQueue.length === 0 && !isSpeaking) {
-          setTimeout(() => setAISpeaking(false), 0);
-        }
-      }, 2000);
     }
   };
 
-  // Get the latest assistant message for TTS - only if it hasn't been spoken yet
-  const latestAssistantMessage = messages
-    .filter(m => m.role === 'assistant')
-    .pop();
-  
-  // Only pass aiResponse if this message hasn't been spoken yet
-  const aiResponse = latestAssistantMessage && 
-    latestAssistantMessage.id === lastSpokenMessageId ? 
-    latestAssistantMessage.content : 
-    undefined;
-  
-  // Clear spoken message ID after TTS completes
-  useEffect(() => {
-    if (aiResponse && !isProcessing) {
-      // Clear after a delay to ensure TTS completes
-      const clearTimer = setTimeout(() => {
-        setLastSpokenMessageId('');
-      }, 1000);
-      return () => clearTimeout(clearTimer);
-    }
-    return undefined;
-  }, [aiResponse, isProcessing]);
 
   return (
     <div className="relative min-h-screen flex flex-col" onKeyDown={handleKeyDown} tabIndex={-1}>
@@ -754,7 +589,6 @@ export default function ConversationPage() {
             disabled={isProcessing}
             onAudioStream={setAudioStream}
             hidden={true}
-            {...(aiResponse && { aiResponse })}
           />
         </div>
       </div>

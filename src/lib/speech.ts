@@ -65,6 +65,7 @@ interface MoodBasedTiming {
 interface SpeechChunk {
   text: string;
   pauseAfter?: number;
+  volume?: number;
 }
 
 // Main Browser Speech Service (simplified)
@@ -76,6 +77,17 @@ export class BrowserSpeechService {
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private speechQueue: SpeechChunk[] = [];
   private isCurrentlySpeaking: boolean = false;
+
+  // SSL streaming state machine
+  private textBuffer: string = '';
+  private tagBuffer: string = '';
+  private insideBracket: boolean = false;
+  private pendingPause: number = 0;
+  private pendingVolume: number = 1.0;
+  private streamingCallbacks: {
+    onSentenceQueued?: (text: string) => void;
+    onComplete?: () => void;
+  } = {};
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -194,55 +206,105 @@ export class BrowserSpeechService {
     }
   }
 
-  // Parse pause markers from text and create speech chunks
+  // Parse pause markers and volume tags from text and create speech chunks
   private parseTextWithPauses(text: string, moodTiming?: MoodBasedTiming): SpeechChunk[] {
     if (!text.trim()) return [];
 
-    // Regex to find pause markers: [pause:500ms], [breath], [thinking]
-    const pauseRegex = /\[(pause|breath|thinking)(?::(\d+)ms)?\]/gi;
+    // Regex to find pause markers: [pause:0.4s], [pause:500ms], [breath], [thinking]
+    // Also volume markers: [volume:soft], [volume:loud], [volume:normal]
+    const markupRegex = /\[(pause|breath|thinking|volume)(?::([^\]]+))?\]/gi;
     const chunks: SpeechChunk[] = [];
     let lastIndex = 0;
     let match;
+    let currentVolume = 1.0;
 
-    while ((match = pauseRegex.exec(text)) !== null) {
-      // Add text before the pause marker
+    while ((match = markupRegex.exec(text)) !== null) {
+      // Add text before the marker
       if (match.index > lastIndex) {
         const textChunk = text.substring(lastIndex, match.index).trim();
         if (textChunk) {
-          chunks.push({ text: textChunk });
+          chunks.push({ text: textChunk, volume: currentVolume });
         }
       }
 
-      // Calculate pause duration based on type and mood
-      const pauseType = match[1].toLowerCase();
-      const explicitDuration = match[2] ? parseInt(match[2]) : null;
-      const pauseDuration = this.calculatePauseDuration(pauseType, explicitDuration, moodTiming);
+      const markerType = match[1].toLowerCase();
+      const value = match[2];
 
-      // Add pause to the last chunk or create new chunk if none exists
-      if (chunks.length > 0) {
-        chunks[chunks.length - 1].pauseAfter = pauseDuration;
+      if (markerType === 'volume') {
+        // Parse volume setting
+        currentVolume = this.parseVolumeValue(value);
       } else {
-        // Pause at the beginning - create empty chunk with pause
-        chunks.push({ text: '', pauseAfter: pauseDuration });
+        // Parse pause duration
+        const pauseDuration = this.parsePauseDuration(markerType, value, moodTiming);
+
+        // Add pause to the last chunk or create new chunk if none exists
+        if (chunks.length > 0) {
+          chunks[chunks.length - 1].pauseAfter = pauseDuration;
+        } else {
+          // Pause at the beginning - create empty chunk with pause
+          chunks.push({ text: '', pauseAfter: pauseDuration, volume: currentVolume });
+        }
       }
 
-      lastIndex = pauseRegex.lastIndex;
+      lastIndex = markupRegex.lastIndex;
     }
 
-    // Add remaining text after last pause marker
+    // Add remaining text after last marker
     if (lastIndex < text.length) {
       const remainingText = text.substring(lastIndex).trim();
       if (remainingText) {
-        chunks.push({ text: remainingText });
+        chunks.push({ text: remainingText, volume: currentVolume });
       }
     }
 
-    // If no pause markers found, return original text as single chunk
+    // If no markers found, return original text as single chunk
     if (chunks.length === 0) {
-      chunks.push({ text: text.trim() });
+      chunks.push({ text: text.trim(), volume: currentVolume });
     }
 
     return chunks;
+  }
+
+  // Parse volume value from string (soft, normal, loud)
+  private parseVolumeValue(volumeStr: string | undefined): number {
+    if (!volumeStr) return 1.0;
+
+    const normalized = volumeStr.toLowerCase().trim();
+    switch (normalized) {
+      case 'soft':
+      case 'quiet':
+      case 'whisper':
+        return 0.5;
+      case 'loud':
+      case 'emphasis':
+      case 'strong':
+        return 1.0;
+      case 'normal':
+      case 'medium':
+      default:
+        return 0.8;
+    }
+  }
+
+  // Parse pause duration from marker
+  private parsePauseDuration(
+    pauseType: string,
+    value: string | undefined,
+    moodTiming?: MoodBasedTiming
+  ): number {
+    // Check for explicit duration: "0.4s" or "400ms"
+    if (value) {
+      if (value.endsWith('s') && !value.endsWith('ms')) {
+        // Seconds: "0.4s" -> 400ms
+        return parseFloat(value.replace('s', '')) * 1000;
+      } else if (value.endsWith('ms')) {
+        // Milliseconds: "400ms" -> 400ms
+        return parseFloat(value.replace('ms', ''));
+      }
+    }
+
+    // Fallback to type-based durations
+    return this.calculatePauseDuration(pauseType, null, moodTiming);
   }
 
   // Calculate pause duration based on type and mood
@@ -429,7 +491,7 @@ export class BrowserSpeechService {
           } else {
             speakNextChunk();
           }
-        }, onError);
+        }, onError, chunk.volume);
       } else if (chunk.pauseAfter) {
         // Empty text with pause - just wait
         setTimeout(speakNextChunk, chunk.pauseAfter);
@@ -447,7 +509,8 @@ export class BrowserSpeechService {
     text: string,
     options: TextToSpeechOptions,
     onChunkEnd?: () => void,
-    onError?: (error: string) => void
+    onError?: (error: string) => void,
+    chunkVolume?: number
   ) {
     if (!text.trim() || !this.synth) {
       onChunkEnd?.();
@@ -462,7 +525,7 @@ export class BrowserSpeechService {
           onError?.('No voices available');
           return;
         }
-        this.speakChunk(text, options, onChunkEnd, onError);
+        this.speakChunk(text, options, onChunkEnd, onError, chunkVolume);
       }, 500);
       return;
     }
@@ -473,7 +536,8 @@ export class BrowserSpeechService {
     utterance.voice = selectedVoice;
     utterance.rate = options.rate ?? 0.9;
     utterance.pitch = options.pitch ?? 1;
-    utterance.volume = options.volume ?? 1.0;
+    // Use chunk-specific volume if provided, otherwise use options volume
+    utterance.volume = chunkVolume ?? options.volume ?? 1.0;
     utterance.lang = options.lang ?? 'en-GB';
 
     this.currentUtterance = utterance;
@@ -770,6 +834,198 @@ export class BrowserSpeechService {
     this.speechQueue = [];
     this.currentUtterance = null;
     this.synth?.cancel();
+
+    // Reset streaming state
+    this.resetStreamingState();
+  }
+
+  // Reset streaming state machine
+  private resetStreamingState() {
+    this.textBuffer = '';
+    this.tagBuffer = '';
+    this.insideBracket = false;
+    this.pendingPause = 0;
+    this.pendingVolume = 1.0;
+  }
+
+  // Parse SSL tag from buffer
+  private parseSSLTag(tag: string): { pause?: number; volume?: number } {
+    const settings: { pause?: number; volume?: number } = {};
+
+    // Parse [pause:0.3s] or [pause:300ms]
+    const pauseMatch = tag.match(/pause:([\d.]+)(s|ms)/);
+    if (pauseMatch) {
+      const value = parseFloat(pauseMatch[1]);
+      settings.pause = pauseMatch[2] === 's' ? value * 1000 : value;
+    }
+
+    // Parse [volume:soft|normal|loud]
+    const volumeMatch = tag.match(/volume:(soft|normal|loud|quiet|whisper)/);
+    if (volumeMatch) {
+      const volumeMap: Record<string, number> = {
+        soft: 0.5,
+        quiet: 0.5,
+        whisper: 0.5,
+        normal: 0.8,
+        loud: 1.0,
+      };
+      settings.volume = volumeMap[volumeMatch[1]] || 0.8;
+    }
+
+    return settings;
+  }
+
+  // Queue a sentence for speech with pending settings
+  private queueSentenceForSpeech(text: string) {
+    // Clean up text - remove newlines, JSON artifacts, and meaningless content
+    let cleanedText = text
+      .replace(/\\n/g, ' ')  // Remove literal \n
+      .replace(/\n/g, ' ')   // Remove actual newlines
+      .replace(/^["'}]+|["'}]+$/g, '')  // Remove leading/trailing quotes/braces
+      .trim();
+
+    // Skip if empty, only dots, or only whitespace
+    if (!cleanedText || /^\.+$/.test(cleanedText)) return;
+
+    // Create speech chunk with pending settings
+    const chunk: SpeechChunk = {
+      text: cleanedText,
+    };
+
+    if (this.pendingPause > 0) {
+      chunk.pauseAfter = this.pendingPause;
+      console.log('📌 Applying pause:', this.pendingPause, 'ms to:', text.trim().substring(0, 30));
+    }
+
+    if (this.pendingVolume !== 1.0) {
+      chunk.volume = this.pendingVolume;
+      console.log('🔊 Applying volume:', this.pendingVolume, 'to:', text.trim().substring(0, 30));
+    }
+
+    // Add to speech queue
+    this.speechQueue.push(chunk);
+
+    // Notify callback
+    this.streamingCallbacks.onSentenceQueued?.(cleanedText);
+
+    // Start speaking if not already
+    if (!this.isCurrentlySpeaking && this.synth) {
+      this.speakNextChunk();
+    }
+
+    // Reset pending settings
+    this.pendingPause = 0;
+    this.pendingVolume = 1.0;
+  }
+
+  // Process streaming chunk character by character (SSL state machine)
+  queueStreamingChunk(chunk: string) {
+    for (let i = 0; i < chunk.length; i++) {
+      const char = chunk[i];
+
+      if (this.insideBracket) {
+        // INSIDE BRACKET MODE - accumulate tag, ignore sentence endings
+        if (char === ']') {
+          // Tag complete - parse it
+          const settings = this.parseSSLTag(this.tagBuffer);
+
+          if (settings.pause !== undefined) {
+            this.pendingPause = settings.pause;
+          }
+          if (settings.volume !== undefined) {
+            this.pendingVolume = settings.volume;
+          }
+
+          this.tagBuffer = '';
+          this.insideBracket = false;
+        } else {
+          this.tagBuffer += char;
+        }
+      } else {
+        // OUTSIDE BRACKET MODE - look for sentence endings or new tags
+        if (char === '[') {
+          // Starting a new tag - queue current text buffer if it has content
+          if (this.textBuffer.trim().length > 0) {
+            this.queueSentenceForSpeech(this.textBuffer);
+            this.textBuffer = '';
+          }
+
+          this.insideBracket = true;
+          this.tagBuffer = '';
+        } else {
+          // Regular text - accumulate
+          this.textBuffer += char;
+
+          // Check for sentence endings: ., !, ?, or ...
+          const endsWithSentence =
+            this.textBuffer.endsWith('...') ||
+            this.textBuffer.endsWith('.') ||
+            this.textBuffer.endsWith('!') ||
+            this.textBuffer.endsWith('?');
+
+          if (endsWithSentence && this.textBuffer.trim().length > 3) {
+            // Queue complete sentence
+            this.queueSentenceForSpeech(this.textBuffer);
+            this.textBuffer = '';
+          }
+        }
+      }
+    }
+  }
+
+  // Flush any remaining buffered text (call when stream completes)
+  flushStreamingBuffer() {
+    if (this.textBuffer.trim().length > 0) {
+      this.queueSentenceForSpeech(this.textBuffer);
+      this.textBuffer = '';
+    }
+    this.streamingCallbacks.onComplete?.();
+  }
+
+  // Set streaming callbacks
+  setStreamingCallbacks(callbacks: {
+    onSentenceQueued?: (text: string) => void;
+    onComplete?: () => void;
+  }) {
+    this.streamingCallbacks = callbacks;
+  }
+
+  // Speak next chunk in queue
+  private speakNextChunk() {
+    if (this.speechQueue.length === 0 || !this.synth) {
+      this.isCurrentlySpeaking = false;
+      return;
+    }
+
+    this.isCurrentlySpeaking = true;
+    const chunk = this.speechQueue.shift()!;
+
+    // Apply pause before speaking if specified
+    const speakChunk = () => {
+      this.speakChunk(
+        chunk.text,
+        {
+          volume: chunk.volume || 1.0,
+          rate: 1.0,  // Normal speech rate
+          pitch: 1.0
+        },
+        () => {
+          // After chunk completes, check for pause after
+          if (chunk.pauseAfter && chunk.pauseAfter > 0) {
+            setTimeout(() => this.speakNextChunk(), chunk.pauseAfter);
+          } else {
+            this.speakNextChunk();
+          }
+        },
+        (error) => {
+          console.error('Speech chunk error:', error);
+          this.speakNextChunk(); // Continue with next chunk
+        },
+        chunk.volume
+      );
+    };
+
+    speakChunk();
   }
 
   // Get available voices
