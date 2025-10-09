@@ -50,15 +50,20 @@ const hexToRgb = (hex: string) => {
   } : { r: 0, g: 0, b: 0 };
 };
 
-export function VoiceWaveform({ isListening = false, isSpeaking = false, audioStream, onCentralCircleClick, disabled = false, emotionalMood = 'neutral' }: VoiceWaveformProps) {
+export function VoiceWaveform({ isListening: isListeningProp, isSpeaking: isSpeakingProp, audioStream, onCentralCircleClick, disabled = false, emotionalMood = 'neutral' }: VoiceWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const particlesRef = useRef<Particle[]>([]);
   const nextParticleIdRef = useRef(0);
-  
+
   const [particles, setParticles] = useState<Particle[]>([]);
-  const { isProcessing } = useConversationState();
+  // Read all conversation state directly from store to avoid prop sync issues on mobile
+  const { isProcessing, isListening: isListeningStore, isAISpeaking: isSpeakingStore } = useConversationState();
+
+  // Use store values as source of truth, fall back to props for backward compatibility
+  const isListening = isListeningStore ?? isListeningProp ?? false;
+  const isSpeaking = isSpeakingStore ?? isSpeakingProp ?? false;
 
   // Get emotional colors based on mood - ALIVE color palette using color theory
   const getEmotionalColors = (mood: string) => {

@@ -52,8 +52,8 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
 
   const stopListening = useCallback(async () => {
     stopSilenceTimer();
-    setListening(false);
     await speechRef.current?.stopListening();
+    setListening(false);
     if (onAudioStream) {
       onAudioStream(null);
     }
