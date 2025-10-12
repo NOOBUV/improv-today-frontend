@@ -73,11 +73,7 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
       setError('Speech recognition not supported. Use Chrome/Edge.');
       return;
     }
-
-    // Known limitation: Auto-stop silence detection works reliably on desktop
-    // but has issues on mobile browsers (iOS Safari, Android Chrome) due to
-    // unreliable 'onend' events. Mobile users may need to manually stop listening.
-
+    
     clearTranscript();
     setListening(true);
     
@@ -96,6 +92,11 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
         if (isFinal) {
           const finalText = t.trim();
           setTranscript(finalText, false);
+
+          // Transition state immediately when isFinal fires (mobile-friendly)
+          // This ensures state updates even if onend doesn't fire on mobile
+          setListening(false);
+
           stopSilenceTimer();
           silenceTimerRef.current = setTimeout(() => {
             handleFinalTranscript(finalText);
@@ -139,19 +140,10 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
 
   const handleToggle = async () => {
     if (disabled || isAISpeaking) return;
-
+    
     if (isListening) {
-      // Manual stop: send transcript if we have one (mobile UX)
-      const currentTranscript = transcript || interimTranscript;
       await stopListening();
-
-      if (currentTranscript.trim()) {
-        // Send the transcript instead of just pausing
-        onTranscriptComplete(currentTranscript.trim());
-      } else {
-        // No transcript, just pause
-        setPaused(true);
-      }
+      setPaused(true);
     } else if (isPaused) {
       setPaused(false);
       await startListening();
