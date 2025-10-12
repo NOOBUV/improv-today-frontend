@@ -24,9 +24,10 @@ interface SpeechInterfaceRef {
 export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfaceProps>(function SpeechInterface({ onTranscriptComplete, disabled = false, aiResponse, onAudioStream, hidden = false }, ref) {
   const speechRef = useRef<SimpleSpeech | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
+  const manuallyStoppedRef = useRef(false);
+
   const { isListening, isAISpeaking } = useClaraConversationState();
-  const { 
+  const {
     isPaused,
     transcript,
     interimTranscript,
@@ -38,6 +39,13 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
     setError,
     clearTranscript,
   } = useClaraStore();
+
+  // Detect if user is on mobile device
+  const isMobileDevice = useRef(
+    typeof window !== 'undefined' &&
+    (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+     (navigator.maxTouchPoints && navigator.maxTouchPoints > 2))
+  ).current;
 
   useEffect(() => {
     speechRef.current = new SimpleSpeech();
@@ -76,7 +84,8 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
     
     clearTranscript();
     setListening(true);
-    
+    manuallyStoppedRef.current = false; // Reset flag when starting new listening session
+
     try {
       // Get audio stream for visualization
       if (onAudioStream) {
@@ -87,19 +96,22 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
           console.warn('Could not get audio stream for visualization:', e);
         }
       }
-      
+
       await speech.startListening(({ transcript: t, isFinal }) => {
         if (isFinal) {
+          // Skip if user already manually stopped (prevents double-send on mobile)
+          if (manuallyStoppedRef.current) {
+            return;
+          }
+
           const finalText = t.trim();
           setTranscript(finalText, false);
-
-          // Transition state immediately when isFinal fires (mobile-friendly)
-          // This ensures state updates even if onend doesn't fire on mobile
-          setListening(false);
-
           stopSilenceTimer();
           silenceTimerRef.current = setTimeout(() => {
-            handleFinalTranscript(finalText);
+            // Double-check flag before sending (race condition protection)
+            if (!manuallyStoppedRef.current) {
+              handleFinalTranscript(finalText);
+            }
           }, config.speech.silenceTimeout);
         } else {
           setTranscript(t, true);
@@ -140,10 +152,31 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
 
   const handleToggle = async () => {
     if (disabled || isAISpeaking) return;
-    
+
     if (isListening) {
-      await stopListening();
-      setPaused(true);
+      // On mobile: clicking while listening sends the transcript (manual stop & send)
+      // On desktop: clicking while listening just pauses (auto-stop via silence detection works)
+      if (isMobileDevice) {
+        const currentTranscript = transcript || interimTranscript;
+
+        // Set flag BEFORE stopping to prevent auto-stop from also firing
+        manuallyStoppedRef.current = true;
+        stopSilenceTimer(); // Cancel any pending auto-stop timer
+
+        await stopListening();
+
+        if (currentTranscript.trim()) {
+          // Mobile: send transcript immediately
+          onTranscriptComplete(currentTranscript.trim());
+        } else {
+          // No transcript, just pause
+          setPaused(true);
+        }
+      } else {
+        // Desktop: just pause
+        await stopListening();
+        setPaused(true);
+      }
     } else if (isPaused) {
       setPaused(false);
       await startListening();
