@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   useClaraStore,
   useClaraConversationState,
@@ -74,6 +74,16 @@ export default function ConversationPage() {
   const firstSpeechStartRef = useRef<number | null>(null);
   const requestSentTimeRef = useRef<number | null>(null);
 
+  // Stable function to auto-start listening after Clara speaks
+  const autoStartListening = useCallback(() => {
+    setTimeout(() => {
+      // Safety check: only start listening if Clara is truly done speaking
+      if (!isAISpeaking && speechInterfaceRef.current?.handleToggle) {
+        speechInterfaceRef.current.handleToggle();
+      }
+    }, config.aiSpeech.autoStartListeningDelay);
+  }, [isAISpeaking]);
+
   // Initialize BrowserSpeechService with callbacks
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -94,17 +104,12 @@ export default function ConversationPage() {
         },
         onComplete: () => {
           setAISpeaking(false);
-
           // Auto-start listening after Clara finishes speaking
-          setTimeout(() => {
-            if (speechInterfaceRef.current?.handleToggle) {
-              speechInterfaceRef.current.handleToggle();
-            }
-          }, config.aiSpeech.autoStartListeningDelay);
+          autoStartListening();
         }
       });
     }
-  }, []);
+  }, [setAISpeaking, autoStartListening]);
 
 
   // Initialize performance monitoring
@@ -242,6 +247,8 @@ export default function ConversationPage() {
     firstSpeechStartRef.current = null;
     requestSentTimeRef.current = performance.now();
 
+    // Reset speaking state before stopping speech to ensure clean state
+    setAISpeaking(false);
     if (speechServiceRef.current) {
       speechServiceRef.current.stopSpeaking();
     }
@@ -565,6 +572,7 @@ export default function ConversationPage() {
             <VoiceWaveform
               isListening={isListening}
               isSpeaking={isAISpeaking}
+              isProcessing={isProcessing}
               audioStream={audioStream}
               onCentralCircleClick={handleCentralCircleClick}
               disabled={isProcessing}

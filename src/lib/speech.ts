@@ -966,7 +966,7 @@ export class BrowserSpeechService {
       this.queueSentenceForSpeech(this.textBuffer);
       this.textBuffer = '';
     }
-    this.streamingCallbacks.onComplete?.();
+    // Note: onComplete now fires from speakNextChunk when queue is truly empty
   }
 
   // Set streaming callbacks
@@ -981,6 +981,8 @@ export class BrowserSpeechService {
   private speakNextChunk() {
     if (this.speechQueue.length === 0 || !this.synth) {
       this.isCurrentlySpeaking = false;
+      // Fire onComplete when queue is truly empty and all speech is done
+      this.streamingCallbacks.onComplete?.();
       return;
     }
 
