@@ -92,6 +92,11 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
         if (isFinal) {
           const finalText = t.trim();
           setTranscript(finalText, false);
+
+          // Transition state immediately when isFinal fires (mobile-friendly)
+          // This ensures state updates even if onend doesn't fire on mobile
+          setListening(false);
+
           stopSilenceTimer();
           silenceTimerRef.current = setTimeout(() => {
             handleFinalTranscript(finalText);
