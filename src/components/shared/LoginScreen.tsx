@@ -15,8 +15,8 @@ export function LoginScreen() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full mx-4">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">ImprovToday</h1>
-          <p className="text-gray-600">Practice English conversation with AI</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Clara</h1>
+          <p className="text-gray-600">Your digital companion — talk with Clara</p>
         </div>
 
         <div className="space-y-4">

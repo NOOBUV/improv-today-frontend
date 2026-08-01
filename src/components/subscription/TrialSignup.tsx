@@ -59,7 +59,7 @@ export function TrialSignup() {
             Start Your Free Trial
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Practice English conversation with Clara, your AI conversation partner. 
+            Talk with Clara — an AI companion whose life unfolds in real time. 
             Try it free for 14 days, then choose a plan that works for you.
           </p>
         </div>

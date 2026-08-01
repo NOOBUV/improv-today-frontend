@@ -25,7 +25,7 @@ export default function SubscriptionCancelPage() {
 
         <CardContent className="space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-semibold text-blue-900 mb-2">Still want to try ImprovToday?</h3>
+            <h3 className="font-semibold text-blue-900 mb-2">Still want to try Clara?</h3>
             <p className="text-sm text-blue-800 mb-3">
               Start your free 14-day trial with no payment required. You can always upgrade later.
             </p>

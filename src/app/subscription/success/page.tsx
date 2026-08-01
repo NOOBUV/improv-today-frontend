@@ -41,7 +41,7 @@ export default function SubscriptionSuccessPage() {
           </div>
           
           <CardTitle className="text-2xl font-bold text-gray-900">
-            {isRefreshing ? 'Processing...' : 'Welcome to ImprovToday!'}
+            {isRefreshing ? 'Processing...' : 'Welcome to Clara!'}
           </CardTitle>
           
           <CardDescription>
