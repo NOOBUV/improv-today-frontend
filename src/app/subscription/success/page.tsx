@@ -65,7 +65,7 @@ export default function SubscriptionSuccessPage() {
             </div>
 
             <div className="space-y-2">
-              <Link href="/practice">
+              <Link href="/conversation">
                 <Button className="w-full" size="lg">
                   Start Your First Conversation
                 </Button>

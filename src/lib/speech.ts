@@ -1063,65 +1063,6 @@ export class BrowserSpeechService {
     });
   }
 
-  // Send transcript to backend for analysis and AI response
-  async analyzeTranscript(transcript: string, targetVocabulary?: string[]): Promise<{
-    aiResponse: string;
-    analysis: unknown;
-    feedback: {
-      clarity: number;
-      fluency: number;
-      suggestions: string[];
-    };
-  }> {
-    // Sending transcript to backend
-
-    try {
-      const requestBody = {
-        message: transcript,
-        target_vocabulary: targetVocabulary || [],
-        session_type: 'daily'
-      };
-
-      // Request body prepared
-
-      const response = await fetch(`/api/backend/conversation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      // Response received
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        // API Error Response
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
-      }
-
-      const data = await response.json();
-      // Successful API response
-
-      return {
-        aiResponse: data.response,
-        analysis: data.usage_analysis,
-        feedback: data.feedback
-      };
-    } catch (error) {
-      // Backend analysis failed
-      
-      return {
-        aiResponse: "That's interesting! Can you tell me more about that?",
-        analysis: null,
-        feedback: {
-          clarity: 75,
-          fluency: 70,
-          suggestions: [`Backend error: ${error instanceof Error ? error.message : 'Unknown error'}`]
-        }
-      };
-    }
-  }
 }
 
 // Export single service instance

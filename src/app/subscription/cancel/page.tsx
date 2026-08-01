@@ -29,7 +29,7 @@ export default function SubscriptionCancelPage() {
             <p className="text-sm text-blue-800 mb-3">
               Start your free 14-day trial with no payment required. You can always upgrade later.
             </p>
-            <Link href="/subscription">
+            <Link href="/conversation">
               <Button variant="outline" size="sm" className="w-full">
                 Start Free Trial
               </Button>

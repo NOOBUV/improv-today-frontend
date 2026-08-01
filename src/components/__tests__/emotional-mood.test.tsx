@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen } from '../../__tests__/test-utils'
-import { EmotionalBackdrop } from '../EmotionalBackdrop'
+import { EmotionalBackdrop } from '../clara/EmotionalBackdrop'
 
 // Mock framer-motion
 jest.mock('framer-motion', () => ({

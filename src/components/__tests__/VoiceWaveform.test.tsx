@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '../../__tests__/test-utils'
-import { VoiceWaveform } from '../VoiceWaveform'
+import { VoiceWaveform } from '../clara/VoiceWaveform'
 
 describe('VoiceWaveform', () => {
   const defaultProps = {
