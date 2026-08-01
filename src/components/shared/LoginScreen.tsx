@@ -22,7 +22,7 @@ export function LoginScreen() {
         <div className="space-y-4">
           <div className="text-center">
             <p className="text-sm text-gray-500 mb-4">
-              Please log in to access the conversation practice
+              Please log in to start talking with Clara
             </p>
           </div>
 
