@@ -100,7 +100,12 @@ export default function ConversationPage() {
   // Initialize BrowserSpeechService with callbacks
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      speechServiceRef.current = new BrowserSpeechService();
+      // Construct once. This effect re-runs whenever autoStartListening changes, i.e. on every
+      // flip of isAISpeaking — which happens mid-reply. Reconstructing there left the old
+      // instance playing its sentence while later chunks went to the new one (split-brain audio).
+      // Only the callbacks need re-binding; setStreamingCallbacks deliberately leaves turn state
+      // alone (see 873213e) so re-binding mid-turn is safe.
+      speechServiceRef.current ??= new BrowserSpeechService();
 
       // Set up streaming callbacks
       speechServiceRef.current.setStreamingCallbacks({
@@ -123,6 +128,10 @@ export default function ConversationPage() {
       });
     }
   }, [setAISpeaking, autoStartListening]);
+
+  // Unmount only — a callback re-bind must not silence Clara mid-reply, so this cleanup
+  // deliberately lives in its own dependency-free effect.
+  useEffect(() => () => speechServiceRef.current?.stopSpeaking(), []);
 
 
   // Initialize performance monitoring
