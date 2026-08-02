@@ -14,6 +14,7 @@ jest.mock('@/lib/speech', () => ({
     stopSpeaking = stopSpeaking
     queueStreamingChunk = jest.fn()
     flushStreamingBuffer = jest.fn()
+    setEmotion = jest.fn()
   },
 }))
 

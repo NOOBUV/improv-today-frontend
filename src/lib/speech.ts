@@ -25,7 +25,7 @@ export function spokenTextSoFar(raw: string): string {
     .replace(/\\(.)/g, (_, c) => (c === 'n' ? ' ' : c));
 }
 
-// Text-to-speech service: Kokoro sidecar first, browser speechSynthesis fallback.
+// Text-to-speech service: local voice server first, browser speechSynthesis fallback.
 export class BrowserSpeechService {
   private synth: SpeechSynthesis | null = null;
   private voices: SpeechSynthesisVoice[] = [];
@@ -35,6 +35,9 @@ export class BrowserSpeechService {
 
   // Streaming sentence buffer
   private textBuffer: string = '';
+  // Conditions the voice server's TTS. Set per turn from the stream's context_ready event,
+  // which lands before the first chunk — so even the first sentence is spoken in character.
+  private emotion: string = 'calm';
   // A drained queue only means the turn is over once the stream itself has ended. Mid-reply the
   // queue empties all the time (next sentence not extracted yet, or a slow TTS engine finishing
   // audio before the next chunk lands) — firing onComplete there stops Clara mid-reply and
@@ -66,7 +69,7 @@ export class BrowserSpeechService {
     }
   }
 
-  // Speak a single chunk: local Kokoro server first, browser speechSynthesis if it can't.
+  // Speak a single chunk: local voice server first, browser speechSynthesis if it can't.
   private speakChunk(
     text: string,
     options: TextToSpeechOptions,
@@ -79,21 +82,21 @@ export class BrowserSpeechService {
       return;
     }
 
-    this.speakViaKokoro(clean, options.volume ?? 1.0)
+    this.speakViaVoiceServer(clean, options.volume ?? 1.0)
       .then(() => onChunkEnd?.())
       .catch(() => this.speakChunkWithBrowser(clean, options, onChunkEnd, onError));
   }
 
-  // POST the sentence to the local Kokoro server and play the WAV. Rejects on anything
+  // POST the sentence to the local voice server and play the WAV. Rejects on anything
   // (server down, non-200, playback refused) so the caller can fall back.
   // ponytail: hardcoded localhost, no cache. It's a dev-machine sidecar, not a service.
-  private async speakViaKokoro(text: string, volume: number): Promise<void> {
+  private async speakViaVoiceServer(text: string, volume: number): Promise<void> {
     const res = await fetch('http://localhost:8880/v1/audio/speech', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: text }),
+      body: JSON.stringify({ input: text, emotion: this.emotion }),
     });
-    if (!res.ok) throw new Error(`Kokoro responded ${res.status}`);
+    if (!res.ok) throw new Error(`Voice server responded ${res.status}`);
     if (!this.isCurrentlySpeaking) return; // stopSpeaking() ran while the audio was in flight
 
     const url = URL.createObjectURL(await res.blob());
@@ -104,7 +107,7 @@ export class BrowserSpeechService {
       await new Promise<void>((resolve, reject) => {
         audio.onended = () => resolve();
         audio.onpause = () => resolve(); // stopSpeaking() pauses — mirrors synth's 'canceled'
-        audio.onerror = () => reject(new Error('Kokoro audio playback failed'));
+        audio.onerror = () => reject(new Error('Voice server audio playback failed'));
         audio.play().catch(reject);
       });
     } finally {
@@ -260,7 +263,7 @@ export class BrowserSpeechService {
     // The turn is over whatever the stream was doing — let the pending drain end it.
     if (this.turnState === 'streaming') this.turnState = 'ended';
     this.speechQueue = [];
-    this.currentAudio?.pause(); // fires 'pause' → the Kokoro promise resolves like a cancel
+    this.currentAudio?.pause(); // fires 'pause' → the fetch promise resolves like a cancel
     this.synth?.cancel();
     this.textBuffer = '';
   }
@@ -286,6 +289,12 @@ export class BrowserSpeechService {
     if (!this.isCurrentlySpeaking && this.synth) {
       this.speakNextChunk();
     }
+  }
+
+  // Emotion for the turn being streamed. Unknown/absent values are the server's problem —
+  // it falls back to its own default rather than guessing here.
+  setEmotion(emotion: string) {
+    this.emotion = emotion || 'calm';
   }
 
   // Buffer streamed text and queue each complete sentence

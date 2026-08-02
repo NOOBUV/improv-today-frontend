@@ -304,6 +304,10 @@ export default function ConversationPage() {
         throw new Error('Authentication required');
       }
 
+      // Fresh turn, no emotion yet — the fallback stream never sends one, so don't
+      // let the previous turn's mood leak into this one's voice.
+      speechServiceRef.current?.setEmotion('calm');
+
       // Use Clara's streaming endpoint
       const response = await fetch('/api/backend/clara/conversation/stream', {
         method: 'POST',
@@ -362,6 +366,12 @@ export default function ConversationPage() {
 
             try {
               const eventData = JSON.parse(data);
+
+              // context_ready carries the turn's emotion and lands before the first chunk,
+              // so the voice server gets it in time to colour the opening sentence.
+              if (eventData.conversation_emotion) {
+                speechServiceRef.current?.setEmotion(eventData.conversation_emotion);
+              }
 
               // Handle consciousness chunks for progressive display and speech
               if (eventData.chunk) {
