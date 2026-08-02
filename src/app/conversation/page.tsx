@@ -26,15 +26,17 @@ import { BrowserSpeechService } from '@/lib/speech';
 import Link from 'next/link';
 
 // Orb hue rotation (degrees) approximating each mood's brand colour
+// Hue rotations visually matched against EmotionalBackdrop's mood palette
+// (the shader's rotation is nonlinear — these were screenshot-verified, not computed)
 const MOOD_HUE: Record<EmotionalMood, number> = {
-  neutral: 0,
-  surprised: 0,
-  excited: 60,
-  angry: 90,
-  frustrated: 115,
-  happy: 128,
-  calm: 250,
-  sad: 307,
+  neutral: 0, // lavender (orb's native violet)
+  surprised: 0, // lavender
+  sad: 20, // cool blue
+  calm: 128, // sage green
+  frustrated: 240, // warm peach
+  happy: 250, // golden
+  angry: 280, // soft pink-red
+  excited: 307, // magenta pink
 };
 
 export default function ConversationPage() {
