@@ -39,6 +39,16 @@ const MOOD_HUE: Record<EmotionalMood, number> = {
   excited: 307, // magenta pink
 };
 
+// Backend emotion vocabulary → frontend EmotionalMood
+const EMOTION_MOOD: Record<string, EmotionalMood> = {
+  'calm': 'calm',
+  'happy': 'happy',
+  'sad': 'sad',
+  'stressed': 'frustrated',
+  'sassy': 'excited',
+  'neutral': 'calm'
+};
+
 export default function ConversationPage() {
   // Use selective hooks consistently
   const { isProcessing, isListening, isAISpeaking } = useClaraConversationState();
@@ -369,8 +379,11 @@ export default function ConversationPage() {
 
               // context_ready carries the turn's emotion and lands before the first chunk,
               // so the voice server gets it in time to colour the opening sentence.
+              // The visuals move with the voice: colour the backdrop/orb now, not at end of stream.
               if (eventData.conversation_emotion) {
                 speechServiceRef.current?.setEmotion(eventData.conversation_emotion);
+                setCurrentMood(EMOTION_MOOD[eventData.conversation_emotion] || 'calm');
+                setLastApiMoodUpdate(Date.now());
               }
 
               // Handle consciousness chunks for progressive display and speech
@@ -416,17 +429,9 @@ export default function ConversationPage() {
                 if (eventData.simulation_context?.conversation_emotion) {
                   const backendEmotion = eventData.simulation_context.conversation_emotion;
 
-                  // Map backend emotion to frontend EmotionalMood
-                  const emotionMap: Record<string, EmotionalMood> = {
-                    'calm': 'calm',
-                    'happy': 'happy',
-                    'sad': 'sad',
-                    'stressed': 'frustrated',
-                    'sassy': 'excited',
-                    'neutral': 'calm'
-                  };
-
-                  const mappedMood = emotionMap[backendEmotion] || 'calm';
+                  // Usually the same value context_ready already applied; the model can
+                  // name a different emotion in its JSON, so take the final word here.
+                  const mappedMood = EMOTION_MOOD[backendEmotion] || 'calm';
 
                   console.log(`🎭 Emotion from API: ${backendEmotion} → ${mappedMood}`);
                   setCurrentMood(mappedMood);
