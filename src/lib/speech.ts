@@ -75,6 +75,7 @@ export class BrowserSpeechService {
   private voices: SpeechSynthesisVoice[] = [];
   private selectedVoice: SpeechSynthesisVoice | null = null;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private currentAudio: HTMLAudioElement | null = null;
   private speechQueue: SpeechChunk[] = [];
   private isCurrentlySpeaking: boolean = false;
 
@@ -491,8 +492,55 @@ export class BrowserSpeechService {
     speakNextChunk();
   }
 
-  // Speak a single chunk of text
+  // Speak a single chunk: local Kokoro server first, browser speechSynthesis if it can't.
   private speakChunk(
+    text: string,
+    options: TextToSpeechOptions,
+    onChunkEnd?: () => void,
+    onError?: (error: string) => void,
+    chunkVolume?: number
+  ) {
+    if (!text.trim()) {
+      onChunkEnd?.();
+      return;
+    }
+
+    this.speakViaKokoro(text, chunkVolume ?? options.volume ?? 1.0)
+      .then(() => onChunkEnd?.())
+      .catch(() => this.speakChunkWithBrowser(text, options, onChunkEnd, onError, chunkVolume));
+  }
+
+  // POST the sentence to the local Kokoro server and play the WAV. Rejects on anything
+  // (server down, non-200, playback refused) so the caller can fall back.
+  // ponytail: hardcoded localhost, no cache. It's a dev-machine sidecar, not a service.
+  private async speakViaKokoro(text: string, volume: number): Promise<void> {
+    const res = await fetch('http://localhost:8880/v1/audio/speech', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: text }),
+    });
+    if (!res.ok) throw new Error(`Kokoro responded ${res.status}`);
+    if (!this.isCurrentlySpeaking) return; // stopSpeaking() ran while the audio was in flight
+
+    const url = URL.createObjectURL(await res.blob());
+    const audio = new Audio(url);
+    audio.volume = volume;
+    this.currentAudio = audio;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        audio.onended = () => resolve();
+        audio.onpause = () => resolve(); // stopSpeaking() pauses — mirrors synth's 'canceled'
+        audio.onerror = () => reject(new Error('Kokoro audio playback failed'));
+        audio.play().catch(reject);
+      });
+    } finally {
+      this.currentAudio = null;
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  // Speak a single chunk of text
+  private speakChunkWithBrowser(
     text: string,
     options: TextToSpeechOptions,
     onChunkEnd?: () => void,
@@ -512,7 +560,7 @@ export class BrowserSpeechService {
           onError?.('No voices available');
           return;
         }
-        this.speakChunk(text, options, onChunkEnd, onError, chunkVolume);
+        this.speakChunkWithBrowser(text, options, onChunkEnd, onError, chunkVolume);
       }, 500);
       return;
     }
@@ -820,6 +868,7 @@ export class BrowserSpeechService {
     this.isCurrentlySpeaking = false;
     this.speechQueue = [];
     this.currentUtterance = null;
+    this.currentAudio?.pause(); // fires 'pause' → the Kokoro promise resolves like a cancel
     this.synth?.cancel();
 
     // Reset streaming state
