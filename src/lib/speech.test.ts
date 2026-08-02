@@ -10,21 +10,9 @@ const mockSpeechSynthesis = {
   ])
 };
 
-const mockSpeechRecognition = jest.fn();
-
 // Setup global mocks
 Object.defineProperty(window, 'speechSynthesis', {
   value: mockSpeechSynthesis,
-  writable: true
-});
-
-Object.defineProperty(window, 'SpeechRecognition', {
-  value: mockSpeechRecognition,
-  writable: true
-});
-
-Object.defineProperty(window, 'webkitSpeechRecognition', {
-  value: mockSpeechRecognition,
   writable: true
 });
 

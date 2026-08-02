@@ -1,43 +1,5 @@
 'use client';
 
-// Browser Speech API Types
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-  message: string;
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  maxAlternatives: number;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
-  onend: ((this: SpeechRecognition, ev: Event) => void) | null;
-  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
-  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition;
-    webkitSpeechRecognition: new () => SpeechRecognition;
-  }
-}
-
-interface SpeechToTextResult {
-  transcript: string;
-  confidence: number;
-  isFinal: boolean;
-}
-
 interface TextToSpeechOptions {
   voice?: SpeechSynthesisVoice;
   rate?: number;
@@ -68,9 +30,8 @@ interface SpeechChunk {
   volume?: number;
 }
 
-// Main Browser Speech Service (simplified)
+// Text-to-speech service: Kokoro sidecar first, browser speechSynthesis fallback.
 export class BrowserSpeechService {
-  private recognition: SpeechRecognition | null = null;
   private synth: SpeechSynthesis | null = null;
   private voices: SpeechSynthesisVoice[] = [];
   private selectedVoice: SpeechSynthesisVoice | null = null;
@@ -94,103 +55,6 @@ export class BrowserSpeechService {
     if (typeof window !== 'undefined') {
       this.synth = window.speechSynthesis;
       this.loadVoices();
-    }
-  }
-
-  // Check if speech recognition is supported
-  isAvailable(): boolean {
-    if (typeof window === 'undefined') return false;
-    
-    // Check for both standard and webkit prefixed versions
-    const hasSupport = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-    
-    // Additional check for mobile - sometimes the constructor exists but throws
-    if (hasSupport) {
-      try {
-        const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
-        new SpeechRecognitionConstructor();
-        return true;
-      } catch {
-        // Speech recognition constructor failed
-        return false;
-      }
-    }
-    
-    return false;
-  }
-
-  // Start listening with Chrome Web Speech API
-  async startListening(
-    onResult: (result: SpeechToTextResult) => void,
-    onError: (error: string) => void
-  ) {
-    if (!this.isAvailable()) {
-      onError('Speech recognition not supported. Please use Chrome or Edge.');
-      return;
-    }
-
-    // Request microphone permission first
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      onError('Microphone access denied. Please allow microphone permission in your browser settings.');
-      return;
-    }
-
-    try {
-      const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
-      this.recognition = new SpeechRecognitionConstructor();
-
-      // Mobile-friendly settings
-      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
-      this.recognition.continuous = !isMobile; // false on mobile, true on desktop
-      this.recognition.interimResults = true;
-      this.recognition.lang = 'en-US';
-      this.recognition.maxAlternatives = 1;
-
-      this.recognition.onresult = (event: SpeechRecognitionEvent) => {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
-          onResult({
-            transcript: result[0].transcript,
-            confidence: result[0].confidence || 0.8,
-            isFinal: result.isFinal,
-          });
-        }
-      };
-
-      this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        // Handle specific errors differently
-        if (event.error === 'not-allowed') {
-          // Speech recognition error
-          onError('Microphone access denied. Please allow microphone permission in your browser settings.');
-        } else if (event.error === 'no-speech') {
-          // Don't treat no-speech as a fatal error - just continue listening silently
-          return; // Don't call onError or log, just continue
-        } else if (event.error === 'audio-capture') {
-          // Speech recognition error
-          onError('Microphone not available. Please check your device settings.');
-        } else if (event.error === 'network') {
-          // Speech recognition error
-          onError('Network error. Please check your internet connection.');
-        } else {
-          // Speech recognition error
-          onError(`Speech recognition error: ${event.error}`);
-        }
-      };
-
-      this.recognition.start();
-    } catch (error) {
-      onError(`Failed to start speech recognition: ${error}`);
-    }
-  }
-
-  // Stop listening
-  stopListening() {
-    if (this.recognition) {
-      this.recognition.stop();
-      this.recognition = null;
     }
   }
 
