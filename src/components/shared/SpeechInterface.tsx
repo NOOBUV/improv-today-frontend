@@ -25,6 +25,9 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
   const speechRef = useRef<SimpleSpeech | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const manuallyStoppedRef = useRef(false);
+  // Latest text heard this session (interim or final) + whether we already sent it.
+  const lastHeardRef = useRef('');
+  const finalizedRef = useRef(false);
 
   const { isListening, isAISpeaking } = useClaraConversationState();
   const {
@@ -67,12 +70,25 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
     }
   }, [stopSilenceTimer, setListening, onAudioStream]);
 
+  // Single exit from a listening session: stop, then send if we heard anything.
+  // Every finalize path (final result, silence watchdog, recognition ending) routes here.
   const handleFinalTranscript = useCallback(async (text: string) => {
+    if (finalizedRef.current) return;
+    finalizedRef.current = true;
     await stopListening();
     if (text.trim()) {
       onTranscriptComplete(text.trim());
     }
   }, [onTranscriptComplete, stopListening]);
+
+  const armSilenceTimer = useCallback((text: string, delay: number) => {
+    stopSilenceTimer();
+    silenceTimerRef.current = setTimeout(() => {
+      if (!manuallyStoppedRef.current) {
+        handleFinalTranscript(text);
+      }
+    }, delay);
+  }, [stopSilenceTimer, handleFinalTranscript]);
 
   const startListening = useCallback(async () => {
     setError(null);
@@ -85,6 +101,8 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
     clearTranscript();
     setListening(true);
     manuallyStoppedRef.current = false; // Reset flag when starting new listening session
+    finalizedRef.current = false;
+    lastHeardRef.current = '';
 
     try {
       // Get audio stream for visualization
@@ -98,26 +116,31 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
       }
 
       await speech.startListening(({ transcript: t, isFinal }) => {
-        if (isFinal) {
-          // Skip if user already manually stopped (prevents double-send on mobile)
-          if (manuallyStoppedRef.current) {
-            return;
-          }
+        // Skip if user already manually stopped (prevents double-send on mobile)
+        if (manuallyStoppedRef.current) {
+          return;
+        }
 
-          const finalText = t.trim();
-          setTranscript(finalText, false);
-          stopSilenceTimer();
-          silenceTimerRef.current = setTimeout(() => {
-            // Double-check flag before sending (race condition protection)
-            if (!manuallyStoppedRef.current) {
-              handleFinalTranscript(finalText);
-            }
-          }, config.speech.silenceTimeout);
+        const text = t.trim();
+        lastHeardRef.current = text;
+
+        if (isFinal) {
+          setTranscript(text, false);
+          armSilenceTimer(text, config.speech.silenceTimeout);
         } else {
           setTranscript(t, true);
-          stopSilenceTimer();
+          // Watchdog: Chrome sometimes never marks a result final after the user goes
+          // quiet, so nothing above ever fires and the UI sticks on "Listening...".
+          armSilenceTimer(text, config.speech.interimSilenceTimeout);
         }
       });
+
+      // Recognition ended on its own (Chrome stops after an utterance, or fired
+      // 'no-speech'). Finalize what we heard — with nothing heard this just clears
+      // isListening so the orb and button leave the listening state.
+      if (!manuallyStoppedRef.current) {
+        await handleFinalTranscript(lastHeardRef.current);
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to start listening';
       setError(message);
@@ -126,7 +149,7 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
         onAudioStream(null);
       }
     }
-  }, [clearTranscript, setListening, setError, setTranscript, stopSilenceTimer, handleFinalTranscript, onAudioStream]);
+  }, [clearTranscript, setListening, setError, setTranscript, armSilenceTimer, handleFinalTranscript, onAudioStream]);
 
   // Handle AI response - speak it and auto-restart listening
   const lastProcessedResponse = useRef<string>('');
@@ -173,7 +196,8 @@ export const SpeechInterface = memo(forwardRef<SpeechInterfaceRef, SpeechInterfa
           setPaused(true);
         }
       } else {
-        // Desktop: just pause
+        // Desktop: just pause. Flag it so the session-ended handler doesn't send.
+        manuallyStoppedRef.current = true;
         await stopListening();
         setPaused(true);
       }

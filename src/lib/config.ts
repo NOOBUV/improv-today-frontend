@@ -8,7 +8,10 @@ export const config = {
   
   // Speech recognition configuration
   speech: {
-    silenceTimeout: 1200, // ms before considering speech complete
+    silenceTimeout: 1200, // ms after a final result before sending
+    // Chrome sometimes stops emitting results after the user goes quiet without ever
+    // marking one final. Watchdog: finalize the interim text after this much silence.
+    interimSilenceTimeout: 1800, // ms of no new results while listening
     language: 'en-US',
     interimResults: true,
     continuous: false,
