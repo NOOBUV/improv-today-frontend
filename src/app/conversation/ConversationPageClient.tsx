@@ -22,7 +22,7 @@ import { HeartbeatControls } from '@/components/clara/HeartbeatControls';
 import { type HeartbeatConfiguration } from '@/components/clara/HeartbeatConfig';
 import { getPerformanceMonitor } from '@/lib/heartbeat-performance';
 import { config } from '@/lib/config';
-import { BrowserSpeechService } from '@/lib/speech';
+import { BrowserSpeechService, spokenTextSoFar } from '@/lib/speech';
 import Link from 'next/link';
 
 // Orb hue rotation (degrees) approximating each mood's brand colour
@@ -322,8 +322,6 @@ export default function ConversationPage() {
       let buffer = '';
       let accumulatedResponse = '';  // This will store the filtered message content only
       let accumulatedJson = '';  // This will store the raw JSON for parsing emotion
-      let messageStarted = false;
-      let insideMessage = false;
       let finalData: any = null;
       const streamStartTime = performance.now();
       let firstChunkReceived = false;
@@ -368,41 +366,9 @@ export default function ConversationPage() {
                 // Track last chunk timing
                 lastChunkTime = performance.now();
 
-                // Accumulate raw JSON for emotion parsing
+                // Accumulate the raw stream and re-derive the spoken text from it
                 accumulatedJson += eventData.chunk;
-
-                // Filter JSON structure to extract only message content
-                const rawChunk = eventData.chunk;
-
-                // STATE 1: Looking for "message": " pattern
-                if (!messageStarted) {
-                  const messageFieldPattern = /"message"\s*:\s*"/;
-                  if (messageFieldPattern.test(accumulatedJson)) {
-                    messageStarted = true;
-                    insideMessage = true;
-
-                    // Extract content that's already accumulated after "message": "
-                    const match = accumulatedJson.match(messageFieldPattern);
-                    if (match) {
-                      const patternEndIdx = (match.index || 0) + match[0].length;
-                      const alreadyAccumulated = accumulatedJson.substring(patternEndIdx);
-                      accumulatedResponse += alreadyAccumulated;
-                    }
-                  }
-                } else if (insideMessage) {
-                  // STATE 2: Inside message field - accumulate content unless it's the closing
-                  if (rawChunk.includes('",') || (rawChunk.includes('"') && accumulatedJson.includes('"emotion"'))) {
-                    insideMessage = false;
-                    // Add content before the closing quote
-                    const endIdx = rawChunk.indexOf('"');
-                    if (endIdx > 0) {
-                      accumulatedResponse += rawChunk.substring(0, endIdx);
-                    }
-                  } else {
-                    // Regular message content - add as-is
-                    accumulatedResponse += rawChunk;
-                  }
-                }
+                accumulatedResponse = spokenTextSoFar(accumulatedJson);
 
                 setStreamingResponse(accumulatedResponse);
 
@@ -467,9 +433,11 @@ export default function ConversationPage() {
       };
       addMessage(assistantMessage);
 
-      // Flush any remaining buffered speech
-      if (speechServiceRef.current) {
-        speechServiceRef.current.flushStreamingBuffer();
+      // Backstop: a stream shape the extractor can't read would show the reply in the
+      // transcript and never speak it. Speak the authoritative final text instead.
+      if (previousResponseLength === 0 && finalData?.response) {
+        console.warn('Speech: extracted nothing from the stream — speaking the final response instead.');
+        speechServiceRef.current?.queueStreamingChunk(finalData.response);
       }
 
     } catch (error) {
@@ -484,6 +452,8 @@ export default function ConversationPage() {
       };
       addMessage(errorMessage);
     } finally {
+      // Every exit path flushes — an aborted stream should still speak what it buffered.
+      speechServiceRef.current?.flushStreamingBuffer();
       setProcessing(false);
       setIsStreaming(false);
       setStreamingResponse('');

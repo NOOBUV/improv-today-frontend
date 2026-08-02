@@ -10,6 +10,21 @@ interface TextToSpeechOptions {
 // strip it before synthesis so tokens like [pause:0.4s] are never read aloud as words.
 const SPEECH_MARKUP = /\[(?:pause|breath|thinking|volume)(?::[^\]]*)?\]/gi;
 
+// Clara's stream is the model's raw output: usually {"message": "...", "emotion": "..."}, but
+// the model sometimes answers in plain prose and the backend's fallback always does (it parses
+// both — see _parse_llm_response). Pull the spoken text out of whatever shape arrived so far,
+// so the TTS path never goes silent on a reply the transcript happily shows.
+// ponytail: string scan, not a streaming JSON parser. One field, one quote to find.
+export function spokenTextSoFar(raw: string): string {
+  const field = raw.match(/"message"\s*:\s*"/);
+  // No "message" yet: a plain-text stream speaks as-is, a JSON one just hasn't got there.
+  if (!field) return raw.trimStart().startsWith('{') ? '' : raw;
+  const after = raw.slice(field.index! + field[0].length);
+  const closing = after.search(/(?<!\\)"/); // -1 while the value is still streaming
+  return (closing === -1 ? after : after.slice(0, closing))
+    .replace(/\\(.)/g, (_, c) => (c === 'n' ? ' ' : c));
+}
+
 // Text-to-speech service: Kokoro sidecar first, browser speechSynthesis fallback.
 export class BrowserSpeechService {
   private synth: SpeechSynthesis | null = null;

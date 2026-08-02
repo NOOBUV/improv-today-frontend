@@ -1,4 +1,4 @@
-import { BrowserSpeechService } from './speech';
+import { BrowserSpeechService, spokenTextSoFar } from './speech';
 
 // Mock Web Speech API
 const mockSpeechSynthesis = {
@@ -52,6 +52,27 @@ describe('BrowserSpeechService - Speech Enhancement', () => {
       expect(global.SpeechSynthesisUtterance).toHaveBeenCalledWith('hey there friend');
 
       global.fetch = originalFetch;
+    });
+  });
+
+  // Regression: a plain-text stream used to extract to '' — the transcript showed the reply
+  // and Clara never said it. Chunks below are real captures from the backend.
+  describe('spokenTextSoFar', () => {
+    test('reads a JSON-wrapped stream and stops at the closing quote', () => {
+      expect(spokenTextSoFar('{\n    "message": "Hey. I\'m ahead of')).toBe("Hey. I'm ahead of");
+      expect(spokenTextSoFar('{\n "message": "Hey. Done.",\n "emotion": "calm"\n}')).toBe('Hey. Done.');
+    });
+
+    test('speaks a plain-text stream as-is', () => {
+      expect(spokenTextSoFar("It's been a lot today.")).toBe("It's been a lot today.");
+    });
+
+    test('waits rather than leaking JSON before the message field arrives', () => {
+      expect(spokenTextSoFar('{')).toBe('');
+    });
+
+    test('unescapes without ending the value on an escaped quote', () => {
+      expect(spokenTextSoFar('{"message": "He said \\"hi\\".\\nThen left.",')).toBe('He said "hi". Then left.');
     });
   });
 
