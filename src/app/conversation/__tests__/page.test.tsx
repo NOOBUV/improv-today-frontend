@@ -77,20 +77,9 @@ jest.mock('@/components/clara/EmotionalBackdrop', () => ({
   ),
 }))
 
-jest.mock('@/components/clara/VoiceWaveform', () => ({
-  VoiceWaveform: ({ isListening, isSpeaking, onCentralCircleClick, disabled, emotionalMood }: any) => (
-    <div data-testid="voice-waveform">
-      <button
-        data-testid="central-circle"
-        disabled={disabled}
-        onClick={onCentralCircleClick}
-        data-listening={isListening}
-        data-speaking={isSpeaking}
-        data-mood={emotionalMood}
-      >
-        Central Circle
-      </button>
-    </div>
+jest.mock('@/components/ui/voice-powered-orb', () => ({
+  VoicePoweredOrb: ({ hue, enableVoiceControl }: any) => (
+    <div data-testid="voice-orb" data-hue={hue} data-voice-control={enableVoiceControl} />
   ),
 }))
 
@@ -118,7 +107,7 @@ describe('ConversationPage', () => {
     it('renders all main components', () => {
       render(<ConversationPage />)
       expect(screen.getByTestId('emotional-backdrop')).toBeInTheDocument()
-      expect(screen.getByTestId('voice-waveform')).toBeInTheDocument()
+      expect(screen.getByTestId('voice-orb')).toBeInTheDocument()
       expect(screen.getByTestId('speech-interface')).toBeInTheDocument()
     })
   })
@@ -310,8 +299,8 @@ describe('ConversationPage', () => {
     })
   })
 
-  describe('Voice Waveform Integration', () => {
-    it('passes correct props to VoiceWaveform', () => {
+  describe('Voice Orb Integration', () => {
+    it('enables orb voice control while listening', () => {
       const mockUseConversationState = jest.requireMock('@/store/claraStore').useClaraConversationState
       mockUseConversationState.mockReturnValue({
         isProcessing: true,
@@ -321,9 +310,8 @@ describe('ConversationPage', () => {
 
       render(<ConversationPage />)
 
-      const centralCircle = screen.getByTestId('central-circle')
-      expect(centralCircle).toHaveAttribute('data-listening', 'true')
-      expect(centralCircle).toHaveAttribute('disabled')
+      expect(screen.getByTestId('voice-orb')).toHaveAttribute('data-voice-control', 'true')
+      expect(screen.getByTestId('central-circle')).toBeDisabled()
     })
 
     it('handles central circle click', () => {

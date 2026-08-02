@@ -35,20 +35,9 @@ jest.mock('@/components/clara/EmotionalBackdrop', () => ({
   ),
 }))
 
-jest.mock('@/components/clara/VoiceWaveform', () => ({
-  VoiceWaveform: ({ isListening, isSpeaking, onCentralCircleClick, disabled, emotionalMood }: any) => (
-    <div data-testid="voice-waveform">
-      <button
-        data-testid="central-circle"
-        disabled={disabled}
-        onClick={onCentralCircleClick}
-        data-listening={isListening}
-        data-speaking={isSpeaking}
-        data-mood={emotionalMood}
-      >
-        Central Circle
-      </button>
-    </div>
+jest.mock('@/components/ui/voice-powered-orb', () => ({
+  VoicePoweredOrb: ({ hue, enableVoiceControl }: any) => (
+    <div data-testid="voice-orb" data-hue={hue} data-voice-control={enableVoiceControl} />
   ),
 }))
 
@@ -302,7 +291,7 @@ describe('Voice Integration Tests', () => {
     })
   })
 
-  describe('SpeechInterface and VoiceWaveform Integration', () => {
+  describe('SpeechInterface and voice visual integration', () => {
     it('coordinates between speech interface and waveform states', async () => {
       let audioStream: MediaStream | null = null
 

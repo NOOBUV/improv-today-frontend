@@ -1,6 +1,5 @@
 import React from 'react'
 import { render, screen, fireEvent } from '../../__tests__/test-utils'
-import { VoiceWaveform } from '../clara/VoiceWaveform'
 
 // Mock framer-motion
 jest.mock('framer-motion', () => ({
@@ -19,109 +18,6 @@ jest.mock('@/store/claraStore', () => ({
 }))
 
 describe('Accessibility Features', () => {
-  const defaultProps = {
-    isListening: false,
-    isSpeaking: false,
-    audioStream: null,
-    onCentralCircleClick: jest.fn(),
-    disabled: false,
-    emotionalMood: 'neutral' as const,
-  }
-
-  describe('VoiceWaveform Accessibility', () => {
-    it('has proper ARIA labels and roles', () => {
-      render(<VoiceWaveform {...defaultProps} />)
-
-      // Check for main region
-      const region = screen.getByRole('region', { name: /voice interaction interface/i })
-      expect(region).toBeInTheDocument()
-
-      // Check for button role
-      const button = screen.getByRole('button')
-      expect(button).toBeInTheDocument()
-    })
-
-    it('provides descriptive ARIA labels for different states', () => {
-      const { rerender } = render(<VoiceWaveform {...defaultProps} />)
-
-      let button = screen.getByRole('button')
-      expect(button).toHaveAttribute('aria-label', /voice interface ready/i)
-
-      rerender(<VoiceWaveform {...defaultProps} isListening={true} />)
-      button = screen.getByRole('button')
-      expect(button).toHaveAttribute('aria-label', /voice input active, listening/i)
-
-      rerender(<VoiceWaveform {...defaultProps} isSpeaking={true} />)
-      button = screen.getByRole('button')
-      expect(button).toHaveAttribute('aria-label', /clara is speaking/i)
-    })
-
-    it('includes ARIA live region for status updates', () => {
-      render(<VoiceWaveform {...defaultProps} />)
-
-      const liveRegion = screen.getByText(/voice interface ready/i)
-      expect(liveRegion).toHaveAttribute('aria-live', 'polite')
-      expect(liveRegion).toHaveAttribute('aria-atomic', 'true')
-    })
-
-    it('updates live region content based on state', () => {
-      const { rerender } = render(<VoiceWaveform {...defaultProps} />)
-
-      expect(screen.getByText(/voice interface ready/i)).toBeInTheDocument()
-
-      rerender(<VoiceWaveform {...defaultProps} isListening={true} />)
-      expect(screen.getByText(/voice input active, listening/i)).toBeInTheDocument()
-
-      rerender(<VoiceWaveform {...defaultProps} isSpeaking={true} />)
-      expect(screen.getByText(/clara is speaking/i)).toBeInTheDocument()
-    })
-
-    it('hides decorative elements from screen readers', () => {
-      render(<VoiceWaveform {...defaultProps} />)
-
-      // Canvas should be hidden from screen readers
-      const canvas = document.querySelector('canvas')
-      expect(canvas).toHaveAttribute('aria-hidden', 'true')
-
-      // Particle container should be hidden from screen readers
-      const particleContainer = document.querySelector('.absolute.inset-0')
-      expect(particleContainer).toHaveAttribute('aria-hidden', 'true')
-    })
-
-    it('provides keyboard accessibility', () => {
-      const mockOnClick = jest.fn()
-      render(<VoiceWaveform {...defaultProps} onCentralCircleClick={mockOnClick} />)
-
-      const button = screen.getByRole('button')
-
-      // Test Enter key
-      fireEvent.keyDown(button, { key: 'Enter' })
-      expect(mockOnClick).toHaveBeenCalledTimes(1)
-
-      // Test Space key
-      fireEvent.keyDown(button, { key: ' ' })
-      expect(mockOnClick).toHaveBeenCalledTimes(2)
-    })
-
-    it('handles focus management correctly', () => {
-      render(<VoiceWaveform {...defaultProps} />)
-
-      const button = screen.getByRole('button')
-      expect(button).toHaveAttribute('tabIndex', '0')
-
-      // When disabled, should not be focusable
-      const { rerender } = render(<VoiceWaveform {...defaultProps} disabled={true} />)
-      expect(button).toHaveAttribute('tabIndex', '-1')
-    })
-
-    it('includes keyboard shortcuts help for screen readers', () => {
-      render(<VoiceWaveform {...defaultProps} />)
-
-      const helpText = screen.getByText(/press enter or space/i)
-      expect(helpText).toHaveClass('sr-only')
-    })
-  })
-
   describe('Conversation Page Accessibility', () => {
     it('includes skip to main content link', () => {
       // Mock the conversation page components

@@ -10,7 +10,7 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { SpeechInterface } from '@/components/shared/SpeechInterface';
 import { EmotionalBackdrop, type EmotionalMood } from '@/components/clara/EmotionalBackdrop';
-import { VoiceWaveform } from '@/components/clara/VoiceWaveform';
+import { VoicePoweredOrb } from '@/components/ui/voice-powered-orb';
 import { Auth } from '@/components/shared/Auth';
 import { useAuth } from '@/components/shared/AuthProvider';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
@@ -24,6 +24,18 @@ import { getPerformanceMonitor } from '@/lib/heartbeat-performance';
 import { config } from '@/lib/config';
 import { BrowserSpeechService } from '@/lib/speech';
 import Link from 'next/link';
+
+// Orb hue rotation (degrees) approximating each mood's brand colour
+const MOOD_HUE: Record<EmotionalMood, number> = {
+  neutral: 0,
+  surprised: 0,
+  excited: 60,
+  angry: 90,
+  frustrated: 115,
+  happy: 128,
+  calm: 250,
+  sad: 307,
+};
 
 export default function ConversationPage() {
   // Use selective hooks consistently
@@ -43,7 +55,6 @@ export default function ConversationPage() {
   );
   
   const [currentMood, setCurrentMood] = useState<EmotionalMood>('happy');
-  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
   const [conversationIntensity, setConversationIntensity] = useState<'low' | 'medium' | 'high'>('low');
   const [lastApiMoodUpdate, setLastApiMoodUpdate] = useState<number>(0);
   const [heartbeatConfig] = useState<HeartbeatConfiguration>({
@@ -174,6 +185,11 @@ export default function ConversationPage() {
       }
     }
   }, [messages, analyzeSentiment, currentMood, lastApiMoodUpdate]);
+
+  const voiceStatus = isListening ? 'Voice input active, listening for speech'
+    : isAISpeaking ? 'Clara is speaking'
+    : isProcessing ? 'Processing your request'
+    : 'Voice interface ready, tap to start conversation';
 
   const handleCentralCircleClick = () => {
     // We'll trigger the same logic as the SpeechInterface toggle
@@ -560,7 +576,7 @@ export default function ConversationPage() {
           </div>
         </header>
 
-        {/* Voice Waveform Visualization */}
+        {/* Voice Orb Visualization */}
         <main
           className="flex-1 flex items-center justify-center"
           id="main-content"
@@ -568,17 +584,39 @@ export default function ConversationPage() {
           aria-labelledby="main-heading"
           aria-describedby="voice-instructions"
         >
-          <div className="w-full h-full max-w-4xl">
-            <VoiceWaveform
-              isListening={isListening}
-              isSpeaking={isAISpeaking}
-              isProcessing={isProcessing}
-              audioStream={audioStream}
-              onCentralCircleClick={handleCentralCircleClick}
+          <div className="relative" role="region" aria-label="Voice interaction interface">
+            <div aria-live="polite" aria-atomic="true" className="sr-only" id="voice-status">
+              {voiceStatus}
+            </div>
+
+            <button
+              type="button"
+              data-testid="central-circle"
+              className="relative w-[min(80vw,460px)] aspect-square rounded-full flex items-center justify-center transition-opacity focus:outline-none focus:ring-4 focus:ring-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleCentralCircleClick}
               disabled={isProcessing}
-              emotionalMood={currentMood}
-              conversationIntensity={conversationIntensity}
-            />
+              aria-describedby="voice-status"
+              aria-label={voiceStatus}
+            >
+              <VoicePoweredOrb
+                className="absolute inset-0"
+                hue={MOOD_HUE[currentMood]}
+                enableVoiceControl={isListening}
+              />
+              <span
+                className="relative text-lg font-semibold px-6 py-3 rounded-full border-2 bg-white/50 backdrop-blur-sm"
+                style={{
+                  color: HEARTBEAT_BPM_CONFIGS[currentMood].color,
+                  borderColor: `${HEARTBEAT_BPM_CONFIGS[currentMood].color}59`,
+                }}
+                aria-hidden="true"
+              >
+                {isListening ? 'Listening...' :
+                 isAISpeaking ? 'Clara Speaking...' :
+                 isProcessing ? 'Thinking...' :
+                 'Tap to Talk'}
+              </span>
+            </button>
           </div>
 
           {/* Hidden instructions for screen readers */}
@@ -595,7 +633,6 @@ export default function ConversationPage() {
             ref={speechInterfaceRef}
             onTranscriptComplete={handleTranscriptComplete}
             disabled={isProcessing}
-            onAudioStream={setAudioStream}
             hidden={true}
           />
         </div>

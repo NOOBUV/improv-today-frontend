@@ -120,27 +120,10 @@ jest.mock('@/store/claraStore', () => ({
   })),
 }))
 
-// Mock VoiceWaveform component
-jest.mock('@/components/clara/VoiceWaveform', () => ({
-  VoiceWaveform: ({ isListening, isSpeaking, onCentralCircleClick, disabled, emotionalMood }: {
-    isListening: boolean;
-    isSpeaking: boolean;
-    onCentralCircleClick: () => void;
-    disabled: boolean;
-    emotionalMood: string;
-  }) => (
-    <div data-testid="voice-waveform">
-      <button
-        data-testid="central-circle"
-        disabled={disabled}
-        onClick={onCentralCircleClick}
-        data-listening={isListening}
-        data-speaking={isSpeaking}
-        data-mood={emotionalMood}
-      >
-        Central Circle
-      </button>
-    </div>
+// Mock VoicePoweredOrb component (WebGL/mic, unavailable in jsdom)
+jest.mock('@/components/ui/voice-powered-orb', () => ({
+  VoicePoweredOrb: ({ hue, enableVoiceControl }: { hue?: number; enableVoiceControl?: boolean }) => (
+    <div data-testid="voice-orb" data-hue={hue} data-voice-control={enableVoiceControl} />
   ),
 }))
 
