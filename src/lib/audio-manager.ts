@@ -18,6 +18,9 @@ export class AudioManager {
   }
 
   private initializeOnUserInteraction() {
+    // ponytail: SSR pass has no document; audio only ever matters in the browser
+    if (typeof document === 'undefined') return;
+
     const initAudio = () => {
       if (!this.isInitialized) {
         this.initialize();
