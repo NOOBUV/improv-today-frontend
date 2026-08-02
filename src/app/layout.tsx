@@ -44,7 +44,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="font-sans antialiased">
+      {/* suppressHydrationWarning: extensions (ColorZilla's cz-shortcut-listen, Grammarly,
+          password managers) add attributes to <body> before React hydrates. Scoped to this
+          element's own attributes — mismatches inside the app still warn. */}
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <ErrorBoundary>
           <AuthProvider>
             <AuthGuard>
