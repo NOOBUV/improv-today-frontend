@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useAuth } from '@/components/shared/AuthProvider';
+import { useAuth, DEV_AUTH_BYPASS } from '@/components/shared/AuthProvider';
 import { useSubscriptionStore } from '@/store/subscription-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +15,7 @@ export function UserProfile() {
 
   // Fetch subscription status when token is available
   useEffect(() => {
-    if (token && user) {
+    if (user && (token || DEV_AUTH_BYPASS)) {
       console.log('UserProfile: Fetching subscription status with token:', token ? 'present' : 'missing');
       fetchSubscriptionStatus(token);
     } else {

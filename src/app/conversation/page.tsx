@@ -12,7 +12,7 @@ import { SpeechInterface } from '@/components/shared/SpeechInterface';
 import { EmotionalBackdrop, type EmotionalMood } from '@/components/clara/EmotionalBackdrop';
 import { VoicePoweredOrb } from '@/components/ui/voice-powered-orb';
 import { Auth } from '@/components/shared/Auth';
-import { useAuth } from '@/components/shared/AuthProvider';
+import { useAuth, DEV_AUTH_BYPASS } from '@/components/shared/AuthProvider';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useSentimentAnalysis } from '@/hooks/useSentimentAnalysis';
 import { sentimentToMoodMapping, HEARTBEAT_BPM_CONFIGS } from '@/utils/heartbeat-utils';
@@ -290,7 +290,8 @@ export default function ConversationPage() {
 
     try {
       // Check if user is authenticated
-      if (!isAuthenticated || !token) {
+      // In dev there is deliberately no token — the backend treats a header-less request as the dev user.
+      if (!isAuthenticated || (!token && !DEV_AUTH_BYPASS)) {
         throw new Error('Authentication required');
       }
 
@@ -299,7 +300,7 @@ export default function ConversationPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           message: transcript,

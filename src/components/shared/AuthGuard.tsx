@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import { useUser } from '@auth0/nextjs-auth0';
 import { LoginScreen } from './LoginScreen';
+import { DEV_AUTH_BYPASS } from './AuthProvider';
 import { SubscriptionGuard } from '../subscription/SubscriptionGuard';
 
 interface AuthGuardProps {
@@ -12,6 +13,11 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children, requireSubscription = true }: AuthGuardProps) {
   const { user, error, isLoading } = useUser();
+
+  // Dev-only: skip login + subscription walls entirely (dead code in a prod build).
+  if (DEV_AUTH_BYPASS) {
+    return <>{children}</>;
+  }
 
   if (isLoading) {
     return (

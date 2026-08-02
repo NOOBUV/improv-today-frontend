@@ -19,6 +19,12 @@ interface AuthContextType {
   refreshToken: () => Promise<void>;
 }
 
+// Dev-only login bypass. NODE_ENV is 'production' in any real build, so this is
+// compile-time dead code there. Counterpart to the backend's dev auth bypass
+// (it accepts requests with no Authorization header when environment=development).
+export const DEV_AUTH_BYPASS = process.env.NODE_ENV === 'development';
+export const DEV_USER: User = { name: 'Dev User', email: 'dev@localhost', sub: 'dev|localhost' };
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function useAuth() {
@@ -66,6 +72,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Only fetch token when auth0User changes
   useEffect(() => {
+    if (DEV_AUTH_BYPASS) return;
     console.log('AuthProvider: useEffect triggered, auth0User:', !!auth0User);
     if (auth0User) {
       fetchAccessToken();
@@ -86,10 +93,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const value: AuthContextType = {
-    user: auth0User || null,
-    token,
-    isLoading: auth0Loading || tokenLoading,
-    isAuthenticated: !!auth0User,
+    user: DEV_AUTH_BYPASS ? DEV_USER : auth0User || null,
+    // Stays null in dev: /api/backend/* is rewritten straight to the backend (next.config.ts),
+    // so the browser's own Authorization header is what it sees — and it only falls back to the
+    // dev user when that header is ABSENT. No token => every `Bearer ${token}` site skips it.
+    token: DEV_AUTH_BYPASS ? null : token,
+    isLoading: DEV_AUTH_BYPASS ? false : auth0Loading || tokenLoading,
+    isAuthenticated: DEV_AUTH_BYPASS || !!auth0User,
     logout,
     refreshToken,
   };

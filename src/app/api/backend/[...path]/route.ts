@@ -3,15 +3,23 @@ import { auth0 } from '@/lib/auth0';
 
 const API_BASE = process.env.API_URL || 'http://localhost:8000';
 
+// NOTE: next.config.ts rewrites /api/backend/:path* straight to the backend, which shadows
+// this handler — the browser's own Authorization header is what the backend actually sees.
+// Kept in sync anyway so the two paths don't diverge if that rewrite is ever removed.
+// Dev-only: skip Auth0 and forward with NO Authorization header — the backend accepts
+// unauthenticated requests as a dev user when its environment is development.
+// NODE_ENV is 'production' in any real build, so this is compile-time dead code there.
+const DEV_AUTH_BYPASS = process.env.NODE_ENV === 'development';
+
 async function handle(req: Request) {
   try {
     console.log('🚀 Auth0 Bearer proxy hit for:', req.url);
-    
+
     // Try to get session and access token from Auth0
     let accessToken: string | null = null;
-    
+
     try {
-      const session = await auth0.getSession();
+      const session = DEV_AUTH_BYPASS ? null : await auth0.getSession();
       console.log('🔍 Auth0 session exists:', !!session);
       
       if (session) {
@@ -33,14 +41,14 @@ async function handle(req: Request) {
       }
     }
     
-    if (!accessToken) {
+    if (!accessToken && !DEV_AUTH_BYPASS) {
       console.log('❌ No valid Bearer token found');
       return NextResponse.json(
         { error: 'Authentication required - Bearer token missing' },
         { status: 401 }
       );
     }
-    
+
     // Build the backend URL
     const { pathname, search } = new URL(req.url);
     const pathString = pathname.replace(/^\/api\/backend\//, '');
@@ -48,7 +56,7 @@ async function handle(req: Request) {
     
     // Prepare headers with authentication
     const headers: Record<string, string> = {
-      'Authorization': `Bearer ${accessToken}`,
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       'Content-Type': 'application/json',
     };
     
