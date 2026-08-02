@@ -10,20 +10,20 @@ const mockSetUserName = jest.fn()
 const mockSetPersonality = jest.fn()
 
 // Override the test-utils mock with our specific mock
-jest.doMock('@/store/conversationStore', () => ({
-  useConversationStore: jest.fn(() => ({
+jest.doMock('@/store/claraStore', () => ({
+  useClaraStore: jest.fn(() => ({
     addMessage: mockAddMessage,
     setProcessing: mockSetProcessing,
     setUserName: mockSetUserName,
     setPersonality: mockSetPersonality,
   })),
-  useConversationState: jest.fn(() => ({
+  useClaraConversationState: jest.fn(() => ({
     isProcessing: false,
     isListening: false,
     isAISpeaking: false,
   })),
-  useMessages: jest.fn(() => []),
-  useSessionState: jest.fn(() => ({
+  useClaraMessages: jest.fn(() => []),
+  useClaraSessionState: jest.fn(() => ({
     userName: 'Test User',
     selectedPersonality: 'friendly',
   })),
@@ -31,25 +31,25 @@ jest.doMock('@/store/conversationStore', () => ({
 
 // Make sure the mock returns the expected object immediately
 const mockStore = {
-  useConversationStore: jest.fn(() => ({
+  useClaraStore: jest.fn(() => ({
     addMessage: mockAddMessage,
     setProcessing: mockSetProcessing,
     setUserName: mockSetUserName,
     setPersonality: mockSetPersonality,
   })),
-  useConversationState: jest.fn(() => ({
+  useClaraConversationState: jest.fn(() => ({
     isProcessing: false,
     isListening: false,
     isAISpeaking: false,
   })),
-  useMessages: jest.fn(() => []),
-  useSessionState: jest.fn(() => ({
+  useClaraMessages: jest.fn(() => []),
+  useClaraSessionState: jest.fn(() => ({
     userName: 'Test User',
     selectedPersonality: 'friendly',
   })),
 }
 
-jest.mock('@/components/SpeechInterface', () => ({
+jest.mock('@/components/shared/SpeechInterface', () => ({
   SpeechInterface: React.forwardRef(({ onTranscriptComplete, disabled, aiResponse }: any, ref: any) => (
     <div data-testid="speech-interface" aria-hidden="true" className="sr-only">
       <button
@@ -69,7 +69,7 @@ jest.mock('@/components/SpeechInterface', () => ({
   )),
 }))
 
-jest.mock('@/components/EmotionalBackdrop', () => ({
+jest.mock('@/components/clara/EmotionalBackdrop', () => ({
   EmotionalBackdrop: ({ mood }: any) => (
     <div data-testid="emotional-backdrop" data-mood={mood}>
       Emotional Backdrop
@@ -77,7 +77,7 @@ jest.mock('@/components/EmotionalBackdrop', () => ({
   ),
 }))
 
-jest.mock('@/components/VoiceWaveform', () => ({
+jest.mock('@/components/clara/VoiceWaveform', () => ({
   VoiceWaveform: ({ isListening, isSpeaking, onCentralCircleClick, disabled, emotionalMood }: any) => (
     <div data-testid="voice-waveform">
       <button
@@ -125,7 +125,7 @@ describe('ConversationPage', () => {
 
   describe('Session Management', () => {
     it('initializes session with default values', () => {
-      const mockUseConversationStore = jest.requireMock('@/store/conversationStore').useConversationStore
+      const mockUseConversationStore = jest.requireMock('@/store/claraStore').useClaraStore
       const mockSetUserName = jest.fn()
       const mockSetPersonality = jest.fn()
 
@@ -143,7 +143,7 @@ describe('ConversationPage', () => {
     })
 
     it('displays correct message count', () => {
-      const mockUseMessages = jest.requireMock('@/store/conversationStore').useMessages
+      const mockUseMessages = jest.requireMock('@/store/claraStore').useClaraMessages
       mockUseMessages.mockReturnValue([
         { id: '1', role: 'user', content: 'Hello', timestamp: new Date() },
         { id: '2', role: 'assistant', content: 'Hi there', timestamp: new Date() },
@@ -164,7 +164,7 @@ describe('ConversationPage', () => {
       // Use global mockAddMessage
       // Use global mockSetProcessing
 
-      jest.requireMock('@/store/conversationStore').useConversationStore.mockReturnValue({
+      jest.requireMock('@/store/claraStore').useClaraStore.mockReturnValue({
         addMessage: mockAddMessage,
         setProcessing: mockSetProcessing,
         setUserName: mockSetUserName,
@@ -199,7 +199,7 @@ describe('ConversationPage', () => {
       // Use global mockAddMessage
       // Use global mockSetProcessing
 
-      jest.requireMock('@/store/conversationStore').useConversationStore.mockReturnValue({
+      jest.requireMock('@/store/claraStore').useClaraStore.mockReturnValue({
         addMessage: mockAddMessage,
         setProcessing: mockSetProcessing,
         setUserName: mockSetUserName,
@@ -229,7 +229,7 @@ describe('ConversationPage', () => {
       })
 
       // Use global mockSetProcessing
-      jest.requireMock('@/store/conversationStore').useConversationStore.mockReturnValue({
+      jest.requireMock('@/store/claraStore').useClaraStore.mockReturnValue({
         addMessage: jest.fn(),
         setProcessing: mockSetProcessing,
         setUserName: jest.fn(),
@@ -312,7 +312,7 @@ describe('ConversationPage', () => {
 
   describe('Voice Waveform Integration', () => {
     it('passes correct props to VoiceWaveform', () => {
-      const mockUseConversationState = jest.requireMock('@/store/conversationStore').useConversationState
+      const mockUseConversationState = jest.requireMock('@/store/claraStore').useClaraConversationState
       mockUseConversationState.mockReturnValue({
         isProcessing: true,
         isListening: true,
@@ -339,7 +339,7 @@ describe('ConversationPage', () => {
 
   describe('Speech Interface Integration', () => {
     it('passes correct props to SpeechInterface', () => {
-      const mockUseConversationState = jest.requireMock('@/store/conversationStore').useConversationState
+      const mockUseConversationState = jest.requireMock('@/store/claraStore').useClaraConversationState
       mockUseConversationState.mockReturnValue({
         isProcessing: true,
         isListening: false,
@@ -353,7 +353,7 @@ describe('ConversationPage', () => {
     })
 
     it('passes AI response to SpeechInterface when available', () => {
-      const mockUseMessages = jest.requireMock('@/store/conversationStore').useMessages
+      const mockUseMessages = jest.requireMock('@/store/claraStore').useClaraMessages
       mockUseMessages.mockReturnValue([
         {
           id: '1',
@@ -378,7 +378,7 @@ describe('ConversationPage', () => {
       })
 
       // Use global mockAddMessage
-      jest.requireMock('@/store/conversationStore').useConversationStore.mockReturnValue({
+      jest.requireMock('@/store/claraStore').useClaraStore.mockReturnValue({
         addMessage: mockAddMessage,
         setProcessing: jest.fn(),
         setUserName: jest.fn(),
@@ -411,7 +411,7 @@ describe('ConversationPage', () => {
         emotional_state: { mood: 'happy' },
       })
 
-      const mockUseMessages = jest.requireMock('@/store/conversationStore').useMessages
+      const mockUseMessages = jest.requireMock('@/store/claraStore').useClaraMessages
       mockUseMessages.mockReturnValue([
         {
           id: 'assistant-1',
@@ -437,7 +437,7 @@ describe('ConversationPage', () => {
       })
 
       // Use global mockAddMessage
-      jest.requireMock('@/store/conversationStore').useConversationStore.mockReturnValue({
+      jest.requireMock('@/store/claraStore').useClaraStore.mockReturnValue({
         addMessage: mockAddMessage,
         setProcessing: jest.fn(),
         setUserName: jest.fn(),
@@ -463,7 +463,7 @@ describe('ConversationPage', () => {
       mockFetchError('Network timeout')
 
       // Use global mockAddMessage
-      jest.requireMock('@/store/conversationStore').useConversationStore.mockReturnValue({
+      jest.requireMock('@/store/claraStore').useClaraStore.mockReturnValue({
         addMessage: mockAddMessage,
         setProcessing: jest.fn(),
         setUserName: jest.fn(),

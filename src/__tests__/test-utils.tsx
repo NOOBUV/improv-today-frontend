@@ -100,27 +100,28 @@ jest.mock('framer-motion', () => ({
 
 // Mock Zustand stores - only provide default implementations
 // Individual test files can override these mocks as needed
-jest.mock('@/store/conversationStore', () => ({
-  useConversationStore: jest.fn(() => ({
+jest.mock('@/store/claraStore', () => ({
+  useClaraStore: jest.fn(() => ({
     addMessage: jest.fn(),
     setProcessing: jest.fn(),
     setUserName: jest.fn(),
     setPersonality: jest.fn(),
+    setAISpeaking: jest.fn(),
   })),
-  useConversationState: jest.fn(() => ({
+  useClaraConversationState: jest.fn(() => ({
     isProcessing: false,
     isListening: false,
     isAISpeaking: false,
   })),
-  useMessages: jest.fn(() => []),
-  useSessionState: jest.fn(() => ({
+  useClaraMessages: jest.fn(() => []),
+  useClaraSessionState: jest.fn(() => ({
     userName: 'Test User',
     selectedPersonality: 'friendly',
   })),
 }))
 
 // Mock VoiceWaveform component
-jest.mock('@/components/VoiceWaveform', () => ({
+jest.mock('@/components/clara/VoiceWaveform', () => ({
   VoiceWaveform: ({ isListening, isSpeaking, onCentralCircleClick, disabled, emotionalMood }: {
     isListening: boolean;
     isSpeaking: boolean;
@@ -144,7 +145,7 @@ jest.mock('@/components/VoiceWaveform', () => ({
 }))
 
 // Mock SpeechInterface component
-jest.mock('@/components/SpeechInterface', () => ({
+jest.mock('@/components/shared/SpeechInterface', () => ({
   SpeechInterface: React.forwardRef<
     { handleToggle: () => void } | null,
     {
@@ -174,7 +175,7 @@ jest.mock('@/components/SpeechInterface', () => ({
 }))
 
 // Mock EmotionalBackdrop component
-jest.mock('@/components/EmotionalBackdrop', () => ({
+jest.mock('@/components/clara/EmotionalBackdrop', () => ({
   EmotionalBackdrop: ({ mood }: { mood: string }) => (
     <div data-testid="emotional-backdrop" data-mood={mood}>
       Emotional Backdrop

@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import { EmotionalBackdrop } from '../EmotionalBackdrop';
+import { EmotionalBackdrop } from '../clara/EmotionalBackdrop';
 
 // Mock Framer Motion
 jest.mock('framer-motion', () => ({

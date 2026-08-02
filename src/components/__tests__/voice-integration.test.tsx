@@ -8,6 +8,7 @@ const mockStore = {
   setProcessing: jest.fn(),
   setUserName: jest.fn(),
   setPersonality: jest.fn(),
+  setAISpeaking: jest.fn(),
 }
 
 const mockState = {
@@ -16,17 +17,17 @@ const mockState = {
   isAISpeaking: false,
 }
 
-jest.mock('@/store/conversationStore', () => ({
-  useConversationStore: jest.fn(() => mockStore),
-  useConversationState: jest.fn(() => mockState),
-  useMessages: jest.fn(() => []),
-  useSessionState: jest.fn(() => ({
+jest.mock('@/store/claraStore', () => ({
+  useClaraStore: jest.fn(() => mockStore),
+  useClaraConversationState: jest.fn(() => mockState),
+  useClaraMessages: jest.fn(() => []),
+  useClaraSessionState: jest.fn(() => ({
     userName: 'Test User',
     selectedPersonality: 'friendly',
   })),
 }))
 
-jest.mock('@/components/EmotionalBackdrop', () => ({
+jest.mock('@/components/clara/EmotionalBackdrop', () => ({
   EmotionalBackdrop: ({ mood }: any) => (
     <div data-testid="emotional-backdrop" data-mood={mood}>
       Emotional Backdrop
@@ -34,7 +35,7 @@ jest.mock('@/components/EmotionalBackdrop', () => ({
   ),
 }))
 
-jest.mock('@/components/VoiceWaveform', () => ({
+jest.mock('@/components/clara/VoiceWaveform', () => ({
   VoiceWaveform: ({ isListening, isSpeaking, onCentralCircleClick, disabled, emotionalMood }: any) => (
     <div data-testid="voice-waveform">
       <button
@@ -56,7 +57,7 @@ const mockSpeechInterfaceRef = {
   handleToggle: jest.fn(),
 }
 
-jest.mock('@/components/SpeechInterface', () => ({
+jest.mock('@/components/shared/SpeechInterface', () => ({
   SpeechInterface: React.forwardRef(({
     onTranscriptComplete,
     disabled,

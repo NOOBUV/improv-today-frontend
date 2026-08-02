@@ -41,7 +41,7 @@ export default function SubscriptionSuccessPage() {
           </div>
           
           <CardTitle className="text-2xl font-bold text-gray-900">
-            {isRefreshing ? 'Processing...' : 'Welcome to ImprovToday!'}
+            {isRefreshing ? 'Processing...' : 'Welcome to Clara!'}
           </CardTitle>
           
           <CardDescription>
@@ -65,7 +65,7 @@ export default function SubscriptionSuccessPage() {
             </div>
 
             <div className="space-y-2">
-              <Link href="/practice">
+              <Link href="/conversation">
                 <Button className="w-full" size="lg">
                   Start Your First Conversation
                 </Button>

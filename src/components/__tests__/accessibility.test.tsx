@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent } from '../../__tests__/test-utils'
-import { VoiceWaveform } from '../VoiceWaveform'
+import { VoiceWaveform } from '../clara/VoiceWaveform'
 
 // Mock framer-motion
 jest.mock('framer-motion', () => ({
@@ -12,8 +12,8 @@ jest.mock('framer-motion', () => ({
 }))
 
 // Mock the conversation store
-jest.mock('@/store/conversationStore', () => ({
-  useConversationState: () => ({
+jest.mock('@/store/claraStore', () => ({
+  useClaraConversationState: () => ({
     isProcessing: false,
   }),
 }))
