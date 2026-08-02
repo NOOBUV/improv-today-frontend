@@ -1,4 +1,4 @@
-import { BrowserSpeechService, spokenTextSoFar } from './speech';
+import { BrowserSpeechService, pcmToFloat32, spokenTextSoFar } from './speech';
 
 // Mock Web Speech API
 const mockSpeechSynthesis = {
@@ -26,6 +26,163 @@ global.SpeechSynthesisUtterance = jest.fn().mockImplementation(() => ({
   onend: null,
   onerror: null
 }));
+
+// Minimal Web Audio stand-in: enough to see what got scheduled, when, and with what samples.
+type FakeSource = {
+  buffer: { getChannelData: () => Float32Array; duration: number } | null;
+  onended: (() => void) | null;
+  startedAt: number | null;
+  connect: jest.Mock;
+  addEventListener: jest.Mock;
+  start: (t: number) => void;
+  stop: jest.Mock;
+};
+const sources: FakeSource[] = [];
+const fakeCtx = {
+  currentTime: 0,
+  state: 'running',
+  destination: {},
+  resume: jest.fn(),
+  createGain: () => ({ gain: { value: 1 }, connect: jest.fn() }),
+  createBuffer: (_ch: number, length: number, sampleRate: number) => {
+    const data = new Float32Array(length);
+    return { length, sampleRate, duration: length / sampleRate, getChannelData: () => data };
+  },
+  createBufferSource: () => {
+    const src: FakeSource = {
+      buffer: null,
+      onended: null,
+      startedAt: null,
+      connect: jest.fn(),
+      addEventListener: jest.fn(),
+      start: (t: number) => { src.startedAt = t; },
+      stop: jest.fn(() => src.onended?.()),
+    };
+    sources.push(src);
+    return src;
+  },
+};
+Object.defineProperty(window, 'AudioContext', { value: jest.fn(() => fakeCtx), writable: true });
+
+// int16 mono, little-endian — what the voice server streams.
+const pcm = (samples: number[]) => new Uint8Array(new Int16Array(samples).buffer);
+
+const streamResponse = (chunks: Uint8Array[]) => {
+  let i = 0;
+  return {
+    ok: true,
+    headers: { get: (k: string) => (k === 'X-Sample-Rate' ? '24000' : 'application/octet-stream') },
+    body: {
+      getReader: () => ({
+        read: async () =>
+          i < chunks.length ? { done: false, value: chunks[i++] } : { done: true, value: undefined },
+        cancel: async () => {},
+      }),
+    },
+  } as unknown as Response;
+};
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const requestedText = (m: jest.Mock) => m.mock.calls.map((c) => JSON.parse(c[1].body).input);
+
+describe('Streamed PCM playback', () => {
+  let speechService: BrowserSpeechService;
+  let fetchMock: jest.Mock;
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sources.length = 0;
+    speechService = new BrowserSpeechService();
+    fetchMock = jest.fn(() => Promise.resolve(streamResponse([pcm(new Array(24000).fill(1000))])));
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => { global.fetch = originalFetch; });
+
+  test('decodes int16 to float32 at full scale', () => {
+    const decoded = pcmToFloat32(pcm([0, 32767, -32768, -16384]));
+    expect(Array.from(decoded).map((v) => Number(v.toFixed(3)))).toEqual([0, 1, -1, -0.5]);
+  });
+
+  test('schedules chunks back-to-back and finishes with the last one', async () => {
+    fetchMock.mockResolvedValue(
+      streamResponse([pcm(new Array(24000).fill(16384)), pcm(new Array(12000).fill(-16384))])
+    );
+    const onEnd = jest.fn();
+    speechService['isCurrentlySpeaking'] = true;
+    speechService['speakChunk']('Hello there.', {}, onEnd);
+    await flush();
+
+    expect(sources).toHaveLength(2);
+    expect(sources[0].startedAt).toBeCloseTo(0.35); // lead-in covers generation drift
+    expect(sources[1].startedAt).toBeCloseTo(1.35); // gapless: exactly one second of audio later
+    expect(sources[0].buffer!.getChannelData()[0]).toBeCloseTo(0.5);
+
+    expect(onEnd).not.toHaveBeenCalled(); // still audible until the last chunk plays out
+    sources[1].onended!();
+    await flush();
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+
+  test('an odd byte split across reads is not dropped or misaligned', async () => {
+    const bytes = pcm([32767, -32768, 16384]);
+    fetchMock.mockResolvedValue(streamResponse([bytes.slice(0, 3), bytes.slice(3)]));
+    speechService['isCurrentlySpeaking'] = true;
+    speechService['speakChunk']('Hi.', {}, jest.fn());
+    await flush();
+
+    const decoded = sources.flatMap((s) => Array.from(s.buffer!.getChannelData()));
+    expect(decoded.map((v) => Number(v.toFixed(3)))).toEqual([1, -1, 0.5]);
+  });
+
+  test('prefetches the next sentence while one plays, then reuses it', async () => {
+    speechService.queueStreamingChunk('One. Two.');
+    await flush();
+
+    // "Two." was requested while "One." was still playing — in order, one in flight.
+    expect(requestedText(fetchMock)).toEqual(['One.', 'Two.']);
+
+    sources[0].onended!(); // "One." finishes
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(2); // "Two." reused its prefetch instead of refetching
+    expect(requestedText(fetchMock)).toEqual(['One.', 'Two.']);
+  });
+
+  test('stopSpeaking kills scheduled audio and the prefetch', async () => {
+    speechService.queueStreamingChunk('One. Two.');
+    await flush();
+    expect(speechService['prefetched']).not.toBeNull();
+
+    speechService.stopSpeaking();
+    expect(sources[0].stop).toHaveBeenCalled();
+    expect(speechService['prefetched']).toBeNull();
+    expect(speechService['playCursor']).toBe(0);
+  });
+
+  // The server gives up on Qwen3 before the first chunk by answering with a whole Kokoro WAV.
+  test('plays the server\'s Kokoro WAV fallback', async () => {
+    const play = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window, 'Audio', {
+      value: jest.fn(() => ({ play, volume: 1, pause: jest.fn() })),
+      writable: true,
+    });
+    global.URL.createObjectURL = jest.fn(() => 'blob:x');
+    global.URL.revokeObjectURL = jest.fn();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      headers: { get: () => 'audio/wav' },
+      blob: async () => new Blob(),
+    } as unknown as Response);
+
+    speechService['isCurrentlySpeaking'] = true;
+    speechService['speakChunk']('Hi.', {}, jest.fn());
+    await flush();
+
+    expect(play).toHaveBeenCalled();
+    expect(sources).toHaveLength(0); // nothing went through the PCM scheduler
+  });
+});
 
 describe('BrowserSpeechService - Speech Enhancement', () => {
   let speechService: BrowserSpeechService;
