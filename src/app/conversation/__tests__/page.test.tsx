@@ -1,7 +1,8 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '../../../__tests__/test-utils'
 import { mockFetchResponse, mockFetchError } from '../../../__tests__/test-utils'
-import ConversationPage from '../page'
+// The route (../page) is a thin ssr:false dynamic() wrapper — test the real component.
+import ConversationPage from '../ConversationPageClient'
 
 // Mock all the required dependencies
 const mockAddMessage = jest.fn()
