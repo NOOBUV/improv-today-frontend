@@ -1,19 +1,9 @@
 'use client';
 
 interface TextToSpeechOptions {
-  voice?: SpeechSynthesisVoice;
   rate?: number;
   pitch?: number;
   volume?: number;
-  lang?: string;
-  moodBasedTiming?: MoodBasedTiming;
-}
-
-interface MoodBasedTiming {
-  mood?: string;
-  baseRate?: number;
-  basePitch?: number;
-  rhythmPattern?: 'excited' | 'calm' | 'nervous' | 'neutral';
 }
 
 // The backend no longer emits speech markup, but old history and stale replies still can —
@@ -24,8 +14,6 @@ const SPEECH_MARKUP = /\[(?:pause|breath|thinking|volume)(?::[^\]]*)?\]/gi;
 export class BrowserSpeechService {
   private synth: SpeechSynthesis | null = null;
   private voices: SpeechSynthesisVoice[] = [];
-  private selectedVoice: SpeechSynthesisVoice | null = null;
-  private currentUtterance: SpeechSynthesisUtterance | null = null;
   private currentAudio: HTMLAudioElement | null = null;
   private speechQueue: string[] = [];
   private isCurrentlySpeaking: boolean = false;
@@ -44,48 +32,6 @@ export class BrowserSpeechService {
     }
   }
 
-  // Apply mood-based speech rate and pitch adjustments
-  private applyMoodBasedTiming(options: TextToSpeechOptions): TextToSpeechOptions {
-    if (!options.moodBasedTiming) return options;
-
-    const moodTiming = options.moodBasedTiming;
-    const enhancedOptions = { ...options };
-
-    // Apply base rate and pitch from mood
-    if (moodTiming.baseRate !== undefined) {
-      enhancedOptions.rate = moodTiming.baseRate;
-    }
-    if (moodTiming.basePitch !== undefined) {
-      enhancedOptions.pitch = moodTiming.basePitch;
-    }
-
-    // Apply rhythm pattern adjustments
-    switch (moodTiming.rhythmPattern) {
-      case 'excited':
-        enhancedOptions.rate = (enhancedOptions.rate || 0.9) * 1.2;
-        enhancedOptions.pitch = (enhancedOptions.pitch || 1) * 1.1;
-        break;
-      case 'calm':
-        enhancedOptions.rate = (enhancedOptions.rate || 0.9) * 0.85;
-        enhancedOptions.pitch = (enhancedOptions.pitch || 1) * 0.95;
-        break;
-      case 'nervous':
-        enhancedOptions.rate = (enhancedOptions.rate || 0.9) * 1.1;
-        enhancedOptions.pitch = (enhancedOptions.pitch || 1) * 1.05;
-        break;
-      case 'neutral':
-      default:
-        // Keep existing values
-        break;
-    }
-
-    // Ensure values stay within valid ranges
-    enhancedOptions.rate = Math.max(0.1, Math.min(10, enhancedOptions.rate || 0.9));
-    enhancedOptions.pitch = Math.max(0, Math.min(2, enhancedOptions.pitch || 1));
-
-    return enhancedOptions;
-  }
-
   // Load available voices
   private loadVoices(): void {
     if (!this.synth) return;
@@ -98,30 +44,6 @@ export class BrowserSpeechService {
         }
       };
     }
-  }
-
-  // One-shot speak with mood-based rate/pitch
-  speak(
-    text: string,
-    options: TextToSpeechOptions = {},
-    onEnd?: () => void,
-    onError?: (error: string) => void
-  ) {
-    if (!text.trim() || !this.synth) return;
-
-    // Chrome fix: Always cancel before speaking to fix Chrome 130 issues
-    this.synth.cancel();
-    this.isCurrentlySpeaking = false;
-    this.speechQueue = [];
-
-    // Wait a bit for cancel to take effect (Chrome needs this)
-    setTimeout(() => {
-      this.isCurrentlySpeaking = true;
-      this.speakChunk(text, this.applyMoodBasedTiming(options), () => {
-        this.isCurrentlySpeaking = false;
-        onEnd?.();
-      }, onError);
-    }, 100);
   }
 
   // Speak a single chunk: local Kokoro server first, browser speechSynthesis if it can't.
@@ -198,22 +120,15 @@ export class BrowserSpeechService {
 
     // Create utterance with settings
     const utterance = new SpeechSynthesisUtterance(text);
-    const selectedVoice = options.voice || this.selectedVoice || this.getDefaultVoice();
-    utterance.voice = selectedVoice;
+    utterance.voice = this.getDefaultVoice();
     utterance.rate = options.rate ?? 0.9;
     utterance.pitch = options.pitch ?? 1;
     utterance.volume = options.volume ?? 1.0;
-    utterance.lang = options.lang ?? 'en-GB';
+    utterance.lang = 'en-GB';
 
-    this.currentUtterance = utterance;
-
-    utterance.onend = () => {
-      this.currentUtterance = null;
-      onChunkEnd?.();
-    };
+    utterance.onend = () => onChunkEnd?.();
 
     utterance.onerror = (event) => {
-      this.currentUtterance = null;
       if (event.error === 'canceled') {
         onChunkEnd?.();
         return;
@@ -225,12 +140,9 @@ export class BrowserSpeechService {
     try {
       this.synth.speak(utterance);
     } catch (error) {
-      this.currentUtterance = null;
       onError?.(`Failed to start speech: ${error}`);
     }
   }
-
-
 
   // Get curated list of premium high-quality voices
   private getPreferredVoices(): string[] {
@@ -322,98 +234,10 @@ export class BrowserSpeechService {
     return englishVoices[0];
   }
 
-  // Create mood-based timing options for Clara's emotional state
-  createMoodBasedTiming(
-    mood: string,
-    intensity: number = 5,
-    bpmFromHeartbeat?: number
-  ): MoodBasedTiming {
-    const normalizedIntensity = Math.max(1, Math.min(10, intensity));
-
-    // Base timing configurations for Clara's 8-mood system
-    const moodConfigs = {
-      happy: {
-        baseRate: 1.0 + (normalizedIntensity - 5) * 0.1,
-        basePitch: 1.1 + (normalizedIntensity - 5) * 0.05,
-        rhythmPattern: 'excited' as const
-      },
-      excited: {
-        baseRate: 1.2 + (normalizedIntensity - 5) * 0.15,
-        basePitch: 1.2 + (normalizedIntensity - 5) * 0.1,
-        rhythmPattern: 'excited' as const
-      },
-      calm: {
-        baseRate: 0.8 - (normalizedIntensity - 5) * 0.05,
-        basePitch: 0.95 - (normalizedIntensity - 5) * 0.02,
-        rhythmPattern: 'calm' as const
-      },
-      sad: {
-        baseRate: 0.7 - (normalizedIntensity - 5) * 0.08,
-        basePitch: 0.9 - (normalizedIntensity - 5) * 0.05,
-        rhythmPattern: 'calm' as const
-      },
-      angry: {
-        baseRate: 1.1 + (normalizedIntensity - 5) * 0.12,
-        basePitch: 1.05 + (normalizedIntensity - 5) * 0.08,
-        rhythmPattern: 'nervous' as const
-      },
-      anxious: {
-        baseRate: 1.05 + (normalizedIntensity - 5) * 0.08,
-        basePitch: 1.08 + (normalizedIntensity - 5) * 0.06,
-        rhythmPattern: 'nervous' as const
-      },
-      neutral: {
-        baseRate: 0.9,
-        basePitch: 1.0,
-        rhythmPattern: 'neutral' as const
-      },
-      confused: {
-        baseRate: 0.85 - (normalizedIntensity - 5) * 0.05,
-        basePitch: 0.98 - (normalizedIntensity - 5) * 0.03,
-        rhythmPattern: 'nervous' as const
-      }
-    };
-
-    const config = moodConfigs[mood as keyof typeof moodConfigs] || moodConfigs.neutral;
-
-    // Adjust timing based on BPM from HeartbeatIcon if available
-    if (bpmFromHeartbeat) {
-      const bpmFactor = bpmFromHeartbeat / 60; // Normalize to 60 BPM baseline
-      config.baseRate *= Math.max(0.7, Math.min(1.5, bpmFactor));
-    }
-
-    // Ensure values stay within Web Speech API limits
-    config.baseRate = Math.max(0.1, Math.min(10, config.baseRate));
-    config.basePitch = Math.max(0, Math.min(2, config.basePitch));
-
-    return {
-      mood: mood,
-      baseRate: config.baseRate,
-      basePitch: config.basePitch,
-      rhythmPattern: config.rhythmPattern
-    };
-  }
-
-  // Check if currently speaking (for integration with conversation state)
-  isSpeaking(): boolean {
-    return this.isCurrentlySpeaking;
-  }
-
-  // Get current utterance information
-  getCurrentUtterance(): SpeechSynthesisUtterance | null {
-    return this.currentUtterance;
-  }
-
-  // Get speech queue status
-  getSpeechQueueLength(): number {
-    return this.speechQueue.length;
-  }
-
   // Stop speaking with enhanced pause control
   stopSpeaking() {
     this.isCurrentlySpeaking = false;
     this.speechQueue = [];
-    this.currentUtterance = null;
     this.currentAudio?.pause(); // fires 'pause' → the Kokoro promise resolves like a cancel
     this.synth?.cancel();
     this.textBuffer = '';
@@ -504,52 +328,6 @@ export class BrowserSpeechService {
         this.speakNextChunk(); // Continue with next chunk
       }
     );
-  }
-
-  // Get available voices
-  getVoices(): SpeechSynthesisVoice[] {
-    return this.voices.filter(voice => voice.lang.startsWith('en'));
-  }
-
-  // Set selected voice
-  setVoice(voice: SpeechSynthesisVoice | null) {
-    this.selectedVoice = voice;
-  }
-
-  // Get current voice
-  getCurrentVoice(): SpeechSynthesisVoice | null {
-    return this.selectedVoice || this.getDefaultVoice();
-  }
-
-  // Get recommended voices (curated high-quality only)
-  getRecommendedVoices(): SpeechSynthesisVoice[] {
-    const voices = this.getVoices();
-    const preferredVoiceNames = this.getPreferredVoices();
-    
-    // Filter voices to only include our curated high-quality list
-    return voices.filter(voice => {
-      return preferredVoiceNames.some(preferredName => 
-        voice.name === preferredName || 
-        voice.name.toLowerCase().includes(preferredName.toLowerCase()) ||
-        // Additional quality indicators
-        (voice.name.toLowerCase().includes('google') && voice.lang.startsWith('en')) ||
-        (voice.name.toLowerCase().includes('microsoft') && voice.lang.startsWith('en')) ||
-        voice.name.toLowerCase().includes('samantha') ||
-        voice.name.toLowerCase().includes('alex') ||
-        voice.name.toLowerCase().includes('karen') ||
-        voice.name.toLowerCase().includes('victoria')
-      );
-    }).filter(voice => {
-      // Exclude low-quality and male voices
-      const voiceName = voice.name.toLowerCase();
-      const lowQualityIndicators = ['espeak', 'basic', 'simple', 'robotic'];
-      const maleIndicators = ['male', 'man', 'daniel', 'james', 'arthur', 'rishi', 'ryan', 'tom', 'david', 'george', 'mark', 'oliver', 'thomas', 'brian', 'william'];
-      
-      const isLowQuality = lowQualityIndicators.some(indicator => voiceName.includes(indicator));
-      const isMale = maleIndicators.some(name => voiceName.includes(name));
-      
-      return !isLowQuality && !isMale;
-    });
   }
 
 }

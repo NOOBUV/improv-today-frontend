@@ -35,63 +35,6 @@ describe('BrowserSpeechService - Speech Enhancement', () => {
     speechService = new BrowserSpeechService();
   });
 
-  describe('Mood-Based Timing', () => {
-    test('should apply excited mood timing', () => {
-      const moodTiming = speechService.createMoodBasedTiming('excited', 7);
-
-      expect(moodTiming.rhythmPattern).toBe('excited');
-      expect(moodTiming.baseRate).toBeGreaterThan(1.0);
-      expect(moodTiming.basePitch).toBeGreaterThan(1.0);
-    });
-
-    test('should apply calm mood timing', () => {
-      const moodTiming = speechService.createMoodBasedTiming('calm', 3);
-
-      expect(moodTiming.rhythmPattern).toBe('calm');
-      expect(moodTiming.baseRate).toBeLessThan(1.0);
-      expect(moodTiming.basePitch).toBeLessThan(1.0);
-    });
-
-    test('should apply BPM adjustment from HeartbeatIcon', () => {
-      const fastBpm = speechService.createMoodBasedTiming('neutral', 5, 90);
-      const slowBpm = speechService.createMoodBasedTiming('neutral', 5, 45);
-
-      expect(fastBpm.baseRate).toBeGreaterThan(slowBpm.baseRate);
-    });
-
-    test('should clamp values within Web Speech API limits', () => {
-      const extremeMood = speechService.createMoodBasedTiming('excited', 10, 120);
-
-      expect(extremeMood.baseRate).toBeLessThanOrEqual(10);
-      expect(extremeMood.baseRate).toBeGreaterThanOrEqual(0.1);
-      expect(extremeMood.basePitch).toBeLessThanOrEqual(2);
-      expect(extremeMood.basePitch).toBeGreaterThanOrEqual(0);
-    });
-  });
-
-  describe('Mood-Based Speech Options', () => {
-    test('should apply mood timing to speech options', () => {
-      const baseOptions = {
-        rate: 0.9,
-        pitch: 1.0,
-        moodBasedTiming: speechService.createMoodBasedTiming('excited', 6)
-      };
-
-      const enhancedOptions = speechService['applyMoodBasedTiming'](baseOptions);
-
-      expect(enhancedOptions.rate).toBeGreaterThan(0.9);
-      expect(enhancedOptions.pitch).toBeGreaterThan(1.0);
-    });
-
-    test('should preserve options without mood timing', () => {
-      const baseOptions = { rate: 0.8, pitch: 1.1 };
-      const enhancedOptions = speechService['applyMoodBasedTiming'](baseOptions);
-
-      expect(enhancedOptions.rate).toBe(0.8);
-      expect(enhancedOptions.pitch).toBe(1.1);
-    });
-  });
-
   describe('Residual Speech Markup', () => {
     test('strips markup before synthesis (Kokoro and browser fallback)', async () => {
       const originalFetch = global.fetch;
@@ -112,18 +55,38 @@ describe('BrowserSpeechService - Speech Enhancement', () => {
     });
   });
 
-  describe('Speech State Management', () => {
-    test('should track speaking state', () => {
-      expect(speechService.isSpeaking()).toBe(false);
+  describe('Streaming Buffer', () => {
+    test('queues on sentence end, holds partial text, flushes the remainder', () => {
+      const queued: string[] = [];
+      speechService.setStreamingCallbacks({ onSentenceQueued: (t) => queued.push(t) });
+      // Keep the queue from draining so we can assert on what was buffered.
+      speechService['isCurrentlySpeaking'] = true;
+
+      speechService.queueStreamingChunk('Hello there. And then');
+      expect(queued).toEqual(['Hello there.']);
+
+      speechService.flushStreamingBuffer();
+      expect(queued).toEqual(['Hello there.', 'And then']);
     });
 
+    test('does not split inside a residual [pause:0.4s] marker', () => {
+      const queued: string[] = [];
+      speechService.setStreamingCallbacks({ onSentenceQueued: (t) => queued.push(t) });
+      speechService['isCurrentlySpeaking'] = true;
+
+      speechService.queueStreamingChunk('Wait [pause:0.4s] for it!');
+      expect(queued).toEqual(['Wait [pause:0.4s] for it!']);
+    });
+  });
+
+  describe('Speech State Management', () => {
     test('should stop speech and reset state', () => {
       speechService['isCurrentlySpeaking'] = true;
       speechService['speechQueue'] = ['test'];
 
       speechService.stopSpeaking();
 
-      expect(speechService.isSpeaking()).toBe(false);
+      expect(speechService['isCurrentlySpeaking']).toBe(false);
       expect(speechService['speechQueue']).toHaveLength(0);
       expect(mockSpeechSynthesis.cancel).toHaveBeenCalled();
     });
@@ -136,23 +99,14 @@ describe('BrowserSpeechService - Speech Enhancement', () => {
 
       const speechServiceNoSynth = new BrowserSpeechService();
 
-      // Should not throw when trying to speak
+      // Should not throw when streaming text at a browser with no speechSynthesis
       expect(() => {
-        speechServiceNoSynth.speak('test');
+        speechServiceNoSynth.queueStreamingChunk('test.');
+        speechServiceNoSynth.flushStreamingBuffer();
       }).not.toThrow();
 
       // Restore
       (window as any).speechSynthesis = originalSynth;
-    });
-
-    test('should provide fallback mechanisms', () => {
-      // Mock scenario where voices are not immediately available
-      mockSpeechSynthesis.getVoices.mockReturnValue([]);
-
-      const speechServiceNoVoices = new BrowserSpeechService();
-      const voices = speechServiceNoVoices.getVoices();
-
-      expect(voices).toHaveLength(0); // Should handle gracefully
     });
   });
 });
