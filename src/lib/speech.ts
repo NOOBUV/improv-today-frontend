@@ -35,6 +35,11 @@ export class BrowserSpeechService {
 
   // Streaming sentence buffer
   private textBuffer: string = '';
+  // A drained queue only means the turn is over once the stream itself has ended. Mid-reply the
+  // queue empties all the time (next sentence not extracted yet, or a slow TTS engine finishing
+  // audio before the next chunk lands) — firing onComplete there stops Clara mid-reply and
+  // re-arms the mic over her. 'ended' waits for the drain; 'idle' means onComplete already fired.
+  private turnState: 'streaming' | 'ended' | 'idle' = 'idle';
   private streamingCallbacks: {
     onSentenceQueued?: (text: string) => void;
     onComplete?: () => void;
@@ -252,6 +257,8 @@ export class BrowserSpeechService {
   // Stop speaking with enhanced pause control
   stopSpeaking() {
     this.isCurrentlySpeaking = false;
+    // The turn is over whatever the stream was doing — let the pending drain end it.
+    if (this.turnState === 'streaming') this.turnState = 'ended';
     this.speechQueue = [];
     this.currentAudio?.pause(); // fires 'pause' → the Kokoro promise resolves like a cancel
     this.synth?.cancel();
@@ -283,6 +290,7 @@ export class BrowserSpeechService {
 
   // Buffer streamed text and queue each complete sentence
   queueStreamingChunk(chunk: string) {
+    this.turnState = 'streaming';
     for (const char of chunk) {
       this.textBuffer += char;
 
@@ -305,13 +313,23 @@ export class BrowserSpeechService {
     }
   }
 
-  // Flush any remaining buffered text (call when stream completes)
+  // Flush any remaining buffered text (call when stream completes — including an aborted or
+  // errored one, so a turn that queued nothing still ends instead of sticking on "speaking").
   flushStreamingBuffer() {
+    this.turnState = 'ended';
     if (this.textBuffer.trim().length > 0) {
-      this.queueSentenceForSpeech(this.textBuffer);
+      const tail = this.textBuffer;
       this.textBuffer = '';
+      this.queueSentenceForSpeech(tail); // may drain synchronously and end the turn itself
     }
-    // Note: onComplete now fires from speakNextChunk when queue is truly empty
+    this.endTurnIfDrained();
+  }
+
+  // onComplete fires once per turn: stream ended, queue empty, nothing playing.
+  private endTurnIfDrained() {
+    if (this.turnState !== 'ended' || this.isCurrentlySpeaking || this.speechQueue.length > 0) return;
+    this.turnState = 'idle';
+    this.streamingCallbacks.onComplete?.();
   }
 
   // Set streaming callbacks
@@ -319,6 +337,8 @@ export class BrowserSpeechService {
     onSentenceQueued?: (text: string) => void;
     onComplete?: () => void;
   }) {
+    // Deliberately does not touch turnState: ConversationPageClient re-registers callbacks
+    // whenever the speaking flag flips, i.e. mid-turn. queueStreamingChunk marks the turn live.
     this.streamingCallbacks = callbacks;
   }
 
@@ -326,8 +346,7 @@ export class BrowserSpeechService {
   private speakNextChunk() {
     if (this.speechQueue.length === 0 || !this.synth) {
       this.isCurrentlySpeaking = false;
-      // Fire onComplete when queue is truly empty and all speech is done
-      this.streamingCallbacks.onComplete?.();
+      this.endTurnIfDrained(); // a gap mid-stream is not the end of the turn
       return;
     }
 

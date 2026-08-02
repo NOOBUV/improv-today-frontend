@@ -100,6 +100,46 @@ describe('BrowserSpeechService - Speech Enhancement', () => {
     });
   });
 
+  // Regression: onComplete used to fire whenever the queue transiently emptied. Mid-reply that
+  // means setAISpeaking(false) + auto-restart of the mic while Clara is still talking.
+  describe('Turn end', () => {
+    test('a mid-reply gap does not end the turn; the drain after the stream ends does, once', () => {
+      const onComplete = jest.fn();
+      speechService.setStreamingCallbacks({ onComplete });
+      speechService['isCurrentlySpeaking'] = true;
+
+      speechService.queueStreamingChunk('First sentence.');
+      // Audio finished before the next chunk arrived — the queue is empty but the stream isn't done.
+      speechService['speechQueue'] = [];
+      speechService['speakNextChunk']();
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(speechService['isCurrentlySpeaking']).toBe(false);
+
+      // Rest of the reply arrives and starts playing, then the stream ends.
+      speechService['isCurrentlySpeaking'] = true;
+      speechService.queueStreamingChunk('Second sentence.');
+      speechService.flushStreamingBuffer();
+      expect(onComplete).not.toHaveBeenCalled(); // still speaking
+
+      speechService['speechQueue'] = [];
+      speechService['speakNextChunk']();
+      expect(onComplete).toHaveBeenCalledTimes(1);
+
+      speechService['speakNextChunk'](); // a stray drain must not re-fire
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    test('an aborted stream that queued nothing still ends the turn', () => {
+      const onComplete = jest.fn();
+      speechService.setStreamingCallbacks({ onComplete });
+
+      speechService.queueStreamingChunk(''); // turn started, then the stream errored out
+      speechService.flushStreamingBuffer();
+
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Speech State Management', () => {
     test('should stop speech and reset state', () => {
       speechService['isCurrentlySpeaking'] = true;
